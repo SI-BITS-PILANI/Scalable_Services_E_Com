@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from decimal import Decimal
+import os
 from typing import Iterator, Optional
 from uuid import uuid4
 
@@ -9,10 +10,19 @@ from fastapi import Depends, FastAPI, Header, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload, sessionmaker
 
-from app.adapters import InMemoryEventPublisher, StubCatalogAdapter, StubPaymentAdapter
+from app.adapters import GrpcCatalogAdapter, InMemoryEventPublisher, StubCatalogAdapter
 from app.database import create_session_factory
 from app.models import Base, OrderItemRecord, OrderRecord, OrderStatus
 from app.schemas import CreateOrderRequest, HealthResponse, OrderItemResponse, OrderResponse
+
+
+def _build_catalog_adapter() -> StubCatalogAdapter:
+    """Return a real gRPC adapter when CATALOG_GRPC_HOST is set, stub otherwise."""
+    host = os.getenv("CATALOG_GRPC_HOST")
+    if host:
+        port = int(os.getenv("CATALOG_GRPC_PORT", "50051"))
+        return GrpcCatalogAdapter(host=host, port=port)  # type: ignore[return-value]
+    return StubCatalogAdapter()
 
 
 class OrderService:
@@ -20,12 +30,10 @@ class OrderService:
         self,
         session_factory: sessionmaker,
         catalog_adapter: StubCatalogAdapter,
-        payment_adapter: StubPaymentAdapter,
         event_publisher: InMemoryEventPublisher,
     ) -> None:
         self.session_factory = session_factory
         self.catalog_adapter = catalog_adapter
-        self.payment_adapter = payment_adapter
         self.event_publisher = event_publisher
 
     @contextmanager
@@ -66,7 +74,6 @@ class OrderService:
             session.flush()
             session.refresh(order)
 
-            self.payment_adapter.request_payment(order.order_id, Decimal(order.total), order.currency)
             self.event_publisher.publish(
                 "OrderCreated",
                 {"order_id": order.order_id, "customer_id": customer_id},
@@ -159,8 +166,7 @@ def create_app(database_url: Optional[str] = None) -> FastAPI:
     app = FastAPI(title="Order Service", version="1.0.0")
     app.state.order_service = OrderService(
         session_factory=session_factory,
-        catalog_adapter=StubCatalogAdapter(),
-        payment_adapter=StubPaymentAdapter(),
+        catalog_adapter=_build_catalog_adapter(),
         event_publisher=InMemoryEventPublisher(),
     )
 
