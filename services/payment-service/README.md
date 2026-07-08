@@ -132,6 +132,11 @@ Pattern:
 Recommended database for Payment Service:
 - PostgreSQL (ACID transactions, strong consistency, reliable audit trail)
 
+Seed data decision:
+- Seed data is optional for correctness because payment rows are transactional.
+- We include a minimal demo seed so the team can show database state, query screenshots, and Swagger/demo flow before all POST APIs are implemented.
+- The seed runs only on first database creation; after that, the persisted volume keeps the existing data.
+
 Suggested owned entities:
 - `payments` (paymentId, orderId, customerId, amount, currency, method, status, providerRef, createdAt, updatedAt)
 - `payment_events` (eventId, paymentId, type, payload, publishedAt)
@@ -198,7 +203,7 @@ CMD ["node", "src/server.js"]
 docker build -t payment-service:1.0.0 .
 ```
 
-### Run container
+### Run service container only
 
 ```bash
 docker run --name payment-service \
@@ -207,6 +212,76 @@ docker run --name payment-service \
   -e PAYMENT_DB_URL=postgres://postgres:postgres@host.docker.internal:5432/payment_db \
   -e BROKER_URL=amqp://host.docker.internal:5672 \
   payment-service:1.0.0
+```
+
+### Run service and PostgreSQL together with Docker Compose
+
+We use a dedicated PostgreSQL container plus a named Docker volume.
+This is important because stopping a container must not delete payment data.
+
+Files used:
+- `docker-compose.yml`
+- `db/init/01-init-payment-db.sql`
+
+Start the stack:
+
+```bash
+docker compose up -d --build
+```
+
+Check containers:
+
+```bash
+docker compose ps
+```
+
+Open the service:
+
+```bash
+http://localhost:8003/health
+http://localhost:8003/docs
+```
+
+### PostgreSQL persistence
+
+The PostgreSQL service stores data in the named volume `payment-db-data`.
+Because the data is stored in a Docker volume, the records remain even if you stop or restart the containers.
+
+Stop containers without deleting data:
+
+```bash
+docker compose stop
+docker compose start
+```
+
+Bring down containers but keep the database volume:
+
+```bash
+docker compose down
+docker compose up -d
+```
+
+Delete containers and also delete the database data only when you intentionally want a fresh database:
+
+```bash
+docker compose down -v
+```
+
+### Demo seed data
+
+The init script creates the `payments` table and inserts three demo rows the first time the database container is initialized.
+
+Seed intent:
+- one successful payment
+- one pending payment
+- one failed payment
+
+This gives enough variety for assignment screenshots and API demonstrations.
+
+### Query the seed data
+
+```bash
+docker exec -it payment-db psql -U payment_user -d payment_db -c "SELECT payment_id, order_id, status, amount FROM payments;"
 ```
 
 ### Verify container is running

@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Payment Service API
-  description: API documentation for the payment-service scaffold
+  description: API documentation for the payment-service
   version: 1.0.0
 servers:
   - url: http://localhost:8003
@@ -10,7 +10,91 @@ tags:
   - name: Health
     description: Service health endpoints
   - name: Payments
-    description: Payment API scaffold endpoints
+    description: Payment API endpoints
+components:
+  schemas:
+    Payment:
+      type: object
+      properties:
+        paymentId:
+          type: string
+          example: pay_2f5a8bd5f1b1
+        orderId:
+          type: string
+          example: ord_1001
+        customerId:
+          type: string
+          example: cust_1001
+        amount:
+          type: number
+          format: float
+          example: 1499
+        currency:
+          type: string
+          example: INR
+        method:
+          type: string
+          example: CARD
+        status:
+          type: string
+          example: SUCCEEDED
+        transactionRef:
+          type: string
+          example: txn_9f8a8fd10c43
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    CreatePaymentRequest:
+      type: object
+      required:
+        - orderId
+        - customerId
+        - amount
+        - currency
+        - method
+      properties:
+        orderId:
+          type: string
+          example: ord_1001
+        customerId:
+          type: string
+          example: cust_1001
+        amount:
+          type: number
+          format: float
+          example: 1499
+        currency:
+          type: string
+          example: INR
+        method:
+          type: string
+          enum: [CARD, UPI, NET_BANKING, WALLET]
+        metadata:
+          type: object
+          additionalProperties: true
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+    PaymentListResponse:
+      type: object
+      properties:
+        count:
+          type: integer
+          example: 3
+        payments:
+          type: array
+          items:
+            $ref: '#/components/schemas/Payment'
 paths:
   /health:
     get:
@@ -32,30 +116,173 @@ paths:
                   status:
                     type: string
                     example: ok
+                  database:
+                    type: string
+                    example: ok
                   timestamp:
                     type: string
                     format: date-time
         "500":
           description: Health check failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/v1/payments:
     get:
       tags:
         - Payments
-      summary: Get payment API scaffold message
-      operationId: getPaymentsScaffold
+      summary: List all payments
+      operationId: listPayments
       responses:
         "200":
-          description: Scaffold ready message
+          description: Payments list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentListResponse'
+        "500":
+          description: Failed to fetch payments
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    post:
+      tags:
+        - Payments
+      summary: Create a payment
+      operationId: createPayment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePaymentRequest'
+      responses:
+        "201":
+          description: Payment created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Payment'
+        "400":
+          description: Validation failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "500":
+          description: Failed to create payment
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/payments/{paymentId}:
+    get:
+      tags:
+        - Payments
+      summary: Get payment by payment ID
+      operationId: getPaymentById
+      parameters:
+        - in: path
+          name: paymentId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Payment details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Payment'
+        "404":
+          description: Payment not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "500":
+          description: Failed to fetch payment
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/payments/order/{orderId}:
+    get:
+      tags:
+        - Payments
+      summary: Get payments by order ID
+      operationId: getPaymentByOrderId
+      parameters:
+        - in: path
+          name: orderId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Matching payment records
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentListResponse'
+        "404":
+          description: Payment for order not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "500":
+          description: Failed to fetch payment by order ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/payments/{paymentId}/refund:
+    post:
+      tags:
+        - Payments
+      summary: Refund a payment
+      operationId: refundPayment
+      parameters:
+        - in: path
+          name: paymentId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Payment refunded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Payment'
+        "404":
+          description: Payment not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "409":
+          description: Refund not allowed for current payment status
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  message:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                      message:
+                        type: string
+                  currentStatus:
                     type: string
-                    example: Payment service scaffold is ready
-                  nextStep:
-                    type: string
-                    example: Implement POST /api/v1/payments
         "500":
-          description: Payments route failed
+          description: Failed to refund payment
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'

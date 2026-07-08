@@ -1,10 +1,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { allowedPaymentMethods } from "../app/constants/paymentConstants.js";
 
-test("payment-service scaffold sanity check", async () => {
-  // This keeps the test pipeline active while we add real route tests step by step.
+test("allowed payment methods include supported options", async () => {
+  // Keep a lightweight guard test so accidental constant changes are caught early.
   try {
-    assert.equal(1, 1);
+    assert.equal(allowedPaymentMethods.has("CARD"), true);
+    assert.equal(allowedPaymentMethods.has("UPI"), true);
+    assert.equal(allowedPaymentMethods.has("NET_BANKING"), true);
+    assert.equal(allowedPaymentMethods.has("WALLET"), true);
   } catch (error) {
     assert.fail(error.message);
   }

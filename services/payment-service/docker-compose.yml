@@ -1,0 +1,44 @@
+services:
+  payment-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: payment-service
+    depends_on:
+      payment-db:
+        condition: service_healthy
+    environment:
+      PORT: 8003
+      NODE_ENV: production
+      PAYMENT_DB_HOST: payment-db
+      PAYMENT_DB_PORT: 5432
+      PAYMENT_DB_NAME: payment_db
+      PAYMENT_DB_USER: payment_user
+      PAYMENT_DB_PASSWORD: payment_password
+    ports:
+      - "8003:8003"
+
+  payment-db:
+    image: postgres:16-alpine
+    container_name: payment-db
+    environment:
+      POSTGRES_DB: payment_db
+      POSTGRES_USER: payment_user
+      POSTGRES_PASSWORD: payment_password
+    ports:
+      - "5432:5432"
+    volumes:
+      # Named volume keeps PostgreSQL data even if containers are stopped or recreated.
+      - payment-db-data:/var/lib/postgresql/data
+      # Init SQL runs only when the database is created for the first time.
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U payment_user -d payment_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+volumes:
+  payment-db-data:
+    name: payment-db-data
