@@ -1,0 +1,26 @@
+{
+  "name": "payment-service",
+  "version": "1.0.0",
+  "description": "Payment microservice for e-commerce application",
+  "main": "app/main.js",
+  "directories": {
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "node --test",
+    "start": "node app/main.js",
+    "dev": "node --watch app/main.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "express": "^5.2.1",
+    "swagger-ui-express": "^5.0.1",
+    "yamljs": "^0.3.0"
+  }
+}

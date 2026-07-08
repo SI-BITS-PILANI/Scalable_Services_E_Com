@@ -1,0 +1,61 @@
+openapi: 3.0.3
+info:
+  title: Payment Service API
+  description: API documentation for the payment-service scaffold
+  version: 1.0.0
+servers:
+  - url: http://localhost:8003
+    description: Local development server
+tags:
+  - name: Health
+    description: Service health endpoints
+  - name: Payments
+    description: Payment API scaffold endpoints
+paths:
+  /health:
+    get:
+      tags:
+        - Health
+      summary: Get service health status
+      operationId: getHealth
+      responses:
+        "200":
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  service:
+                    type: string
+                    example: payment-service
+                  status:
+                    type: string
+                    example: ok
+                  timestamp:
+                    type: string
+                    format: date-time
+        "500":
+          description: Health check failed
+  /api/v1/payments:
+    get:
+      tags:
+        - Payments
+      summary: Get payment API scaffold message
+      operationId: getPaymentsScaffold
+      responses:
+        "200":
+          description: Scaffold ready message
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Payment service scaffold is ready
+                  nextStep:
+                    type: string
+                    example: Implement POST /api/v1/payments
+        "500":
+          description: Payments route failed
