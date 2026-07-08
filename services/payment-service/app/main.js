@@ -1,9 +1,29 @@
 import express from "express";
+import swaggerUi from "swagger-ui-express";
+import yaml from "yamljs";
 
 const app = express();
 const port = Number(process.env.PORT) || 8003;
+const openApiDocument = yaml.load("./app/docs/openapi.yaml");
 
 app.use(express.json());
+
+// Add Swagger early so API contract is visible while endpoints are implemented incrementally.
+app.use("/docs", swaggerUi.serve, swaggerUi.setup(openApiDocument));
+
+// Expose the raw OpenAPI JSON so gateway/tests can consume the spec programmatically.
+app.get("/docs.json", (request, response) => {
+  try {
+    response.status(200).json(openApiDocument);
+  } catch (error) {
+    response.status(500).json({
+      error: {
+        code: "SWAGGER_DOCS_FAILED",
+        message: "Unable to load OpenAPI document"
+      }
+    });
+  }
+});
 
 // We start with a health endpoint first so container and gateway checks can validate service availability.
 app.get("/health", (request, response) => {
