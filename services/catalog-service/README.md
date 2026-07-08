@@ -1,5 +1,7 @@
 # Catalog Service
 
+Author: [@sojukrishna](https://github.com/sojukrishna)
+
 Owns the **product catalog** (`catalog_db` in its own MongoDB).
 
 ## Responsibilities
