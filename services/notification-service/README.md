@@ -1,6 +1,6 @@
 # Notification Service
 
-Author: [@Varun](https://github.com/Varun)
+Author: [@Varun](https://github.com/Varun-srinivasa)
 
 Owns the **customer notifications** (`notification_db` in its own MongoDB).
 
