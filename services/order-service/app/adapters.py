@@ -86,8 +86,62 @@ class GrpcCatalogAdapter(CatalogPort):
 
 
 class PaymentPort:
-    def request_payment(self, order_id: str, amount: Decimal, currency: str) -> None:
+    def request_payment(
+        self,
+        order_id: str,
+        customer_id: str,
+        amount: Decimal,
+        currency: str,
+        method: str = "CARD",
+    ) -> None:
         raise NotImplementedError
+
+
+class HttpPaymentAdapter(PaymentPort):
+    """Real adapter: calls the payment-service POST /api/v1/payments endpoint.
+
+    Payment-service expects: orderId, customerId, amount, currency, method.
+    A SUCCEEDED response means the payment was accepted synchronously.
+    """
+
+    def __init__(self, base_url: str) -> None:
+        import httpx
+        self._client = httpx.Client(base_url=base_url, timeout=10)
+
+    def request_payment(
+        self,
+        order_id: str,
+        customer_id: str,
+        amount: Decimal,
+        currency: str,
+        method: str = "CARD",
+    ) -> None:
+        payload = {
+            "orderId": order_id,
+            "customerId": customer_id,
+            "amount": float(amount),
+            "currency": currency.upper(),
+            "method": method.upper(),
+        }
+        response = self._client.post("/api/v1/payments", json=payload)
+        if response.status_code not in (200, 201):
+            raise ValueError(
+                f"Payment request failed: {response.status_code} {response.text}"
+            )
+
+
+class StubPaymentAdapter(PaymentPort):
+    """No-op stub used in local development and tests when payment-service is absent."""
+
+    def request_payment(  # type: ignore[override]
+        self,
+        order_id: str,
+        customer_id: str = "",
+        amount: Decimal = Decimal("0"),
+        currency: str = "USD",
+        method: str = "CARD",
+    ) -> None:
+        return None
 
 
 class EventPublisherPort:
@@ -130,11 +184,6 @@ class StubCatalogAdapter(CatalogPort):
             total=subtotal,
             currency=currency,
         )
-
-
-class StubPaymentAdapter(PaymentPort):
-    def request_payment(self, order_id: str, amount: Decimal, currency: str) -> None:
-        return None
 
 
 @dataclass

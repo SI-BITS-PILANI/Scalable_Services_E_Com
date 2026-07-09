@@ -10,7 +10,13 @@ from fastapi import Depends, FastAPI, Header, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload, sessionmaker
 
-from app.adapters import GrpcCatalogAdapter, InMemoryEventPublisher, StubCatalogAdapter
+from app.adapters import (
+    GrpcCatalogAdapter,
+    HttpPaymentAdapter,
+    InMemoryEventPublisher,
+    StubCatalogAdapter,
+    StubPaymentAdapter,
+)
 from app.database import create_session_factory
 from app.models import Base, OrderItemRecord, OrderRecord, OrderStatus
 from app.schemas import CreateOrderRequest, HealthResponse, OrderItemResponse, OrderResponse
@@ -25,15 +31,25 @@ def _build_catalog_adapter() -> StubCatalogAdapter:
     return StubCatalogAdapter()
 
 
+def _build_payment_adapter() -> StubPaymentAdapter:
+    """Return a real HTTP adapter when PAYMENT_SERVICE_URL is set, stub otherwise."""
+    url = os.getenv("PAYMENT_SERVICE_URL")
+    if url:
+        return HttpPaymentAdapter(base_url=url)  # type: ignore[return-value]
+    return StubPaymentAdapter()
+
+
 class OrderService:
     def __init__(
         self,
         session_factory: sessionmaker,
         catalog_adapter: StubCatalogAdapter,
+        payment_adapter: StubPaymentAdapter,
         event_publisher: InMemoryEventPublisher,
     ) -> None:
         self.session_factory = session_factory
         self.catalog_adapter = catalog_adapter
+        self.payment_adapter = payment_adapter
         self.event_publisher = event_publisher
 
     @contextmanager
@@ -74,6 +90,12 @@ class OrderService:
             session.flush()
             session.refresh(order)
 
+            self.payment_adapter.request_payment(
+                order_id=order.order_id,
+                customer_id=customer_id,
+                amount=Decimal(order.total),
+                currency=order.currency,
+            )
             self.event_publisher.publish(
                 "OrderCreated",
                 {"order_id": order.order_id, "customer_id": customer_id},
@@ -167,6 +189,7 @@ def create_app(database_url: Optional[str] = None) -> FastAPI:
     app.state.order_service = OrderService(
         session_factory=session_factory,
         catalog_adapter=_build_catalog_adapter(),
+        payment_adapter=_build_payment_adapter(),
         event_publisher=InMemoryEventPublisher(),
     )
 
