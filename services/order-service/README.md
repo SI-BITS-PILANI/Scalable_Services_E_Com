@@ -3,6 +3,19 @@
 Owns the **order lifecycle** for the ShopFlow e-commerce platform.  
 It is the single service responsible for creating, persisting, and managing orders.
 
+## Assignment coverage snapshot
+
+This document covers Order Service details required for the microservices assignment rubric:
+
+- Decomposition rationale (Business Capability boundary)
+- Independent service responsibility and API surface
+- Service collaborations with command/query/event interaction types
+- Database ownership and data pattern
+- Low-coupled communication choices (REST + gRPC + asynchronous messaging)
+- API Gateway boundary behavior for routing and identity propagation
+- API versioning strategy
+- Docker container build and runtime steps
+
 ---
 
 ## Service decomposition rationale
@@ -19,7 +32,7 @@ Keeping it separate enforces the **Single Responsibility Principle** at the serv
 - Manage order state transitions: `PENDING → CONFIRMED → PAID → CANCELLED`.
 - Expose order history and order detail for the authenticated customer.
 - Trigger a payment request to Payment Service after order creation.
-- Publish domain events (`OrderCreated`, `OrderCancelled`) for downstream consumers such as Notification Service.
+- Publish domain events (`OrderCreated`, `OrderPaid`, `OrderCancelled`) for downstream consumers such as Notification Service.
 
 ---
 
@@ -42,7 +55,7 @@ Keeping it separate enforces the **Single Responsibility Principle** at the serv
 | REST (inbound) | ← API Gateway | — | **8002** | Customer-facing order commands and queries |
 | gRPC (outbound) | → Catalog Service | port 50051 | — | Synchronous basket validation before order is saved |
 | REST (outbound) | → Payment Service | port 8003 | — | Synchronous payment request after order is saved |
-| Events (outbound) | → broker/topic | RabbitMQ (`ecom.events`) | — | `order.OrderCreated`, `order.OrderCancelled` for Notification and saga consumers |
+| Events (outbound) | → broker/topic | RabbitMQ (`ecom.events`) | — | `order.OrderCreated`, `order.OrderPaid`, `order.OrderCancelled` for Notification and saga consumers |
 
 ---
 
@@ -123,6 +136,22 @@ Client → API Gateway → Order Service
 
 ---
 
+## API Gateway boundary layer
+
+Order Service is not exposed directly to clients in the target architecture.  
+The API Gateway acts as the single entry point and forwards requests to Order Service.
+
+Gateway responsibilities relevant to this service:
+
+- Route customer order requests to `/api/v1/orders*`
+- Hide internal service topology (catalog/payment/notification remain internal)
+- Propagate authenticated identity via `X-Customer-Id`
+- Centralize cross-cutting policies such as auth, logging, metrics, and rate limiting
+
+This keeps Order Service focused on business logic while boundary concerns remain centralized.
+
+---
+
 ## Data ownership and database pattern
 
 This is the **only** service that connects to `order_db`. Other services must use the REST API above to read order data.
@@ -146,6 +175,7 @@ Item names and prices are **snapshotted at checkout time** so future catalog cha
 | Event | When | Consumers |
 |-------|------|-----------|
 | `order.OrderCreated` | After order is persisted and payment is requested | Notification Service, saga consumers |
+| `order.OrderPaid` | After payment succeeds and order transitions to `PAID` | Notification Service, saga consumers |
 | `order.OrderCancelled` | After a PENDING/CONFIRMED order is cancelled | Notification Service |
 
 Notification Service currently subscribes to these routing keys from exchange `ecom.events`.
@@ -166,7 +196,7 @@ To align with that integration, order-service should publish with the `order.` p
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `DATABASE_URL` | Yes | `sqlite:///./order_service.db` | PostgreSQL connection string |
+| `DATABASE_URL` | No | `sqlite:///./order_service.db` | Database connection string (use PostgreSQL for local integration) |
 | `CATALOG_GRPC_HOST` | No | — | Hostname of Catalog Service; enables real gRPC validation when set |
 | `CATALOG_GRPC_PORT` | No | `50051` | gRPC port of Catalog Service |
 | `PAYMENT_SERVICE_URL` | No | — | Base URL of Payment Service; enables real HTTP payment when set |
