@@ -14,6 +14,7 @@ from app.adapters import (
     GrpcCatalogAdapter,
     HttpPaymentAdapter,
     InMemoryEventPublisher,
+    RabbitMqEventPublisher,
     StubCatalogAdapter,
     StubPaymentAdapter,
 )
@@ -37,6 +38,15 @@ def _build_payment_adapter() -> StubPaymentAdapter:
     if url:
         return HttpPaymentAdapter(base_url=url)  # type: ignore[return-value]
     return StubPaymentAdapter()
+
+
+def _build_event_publisher() -> InMemoryEventPublisher:
+    """Return a real RabbitMQ publisher when RABBITMQ_URL is set, in-memory otherwise."""
+    rabbitmq_url = os.getenv("RABBITMQ_URL")
+    if rabbitmq_url:
+        exchange = os.getenv("RABBITMQ_EXCHANGE", "ecom.events")
+        return RabbitMqEventPublisher(amqp_url=rabbitmq_url, exchange=exchange)  # type: ignore[return-value]
+    return InMemoryEventPublisher()
 
 
 class OrderService:
@@ -97,7 +107,7 @@ class OrderService:
                 currency=order.currency,
             )
             self.event_publisher.publish(
-                "OrderCreated",
+                "order.OrderCreated",
                 {"order_id": order.order_id, "customer_id": customer_id},
             )
             return self._to_response(order)
@@ -133,7 +143,7 @@ class OrderService:
             session.refresh(order)
 
             self.event_publisher.publish(
-                "OrderCancelled",
+                "order.OrderCancelled",
                 {"order_id": order.order_id, "customer_id": customer_id},
             )
             return self._to_response(order)
@@ -190,7 +200,7 @@ def create_app(database_url: Optional[str] = None) -> FastAPI:
         session_factory=session_factory,
         catalog_adapter=_build_catalog_adapter(),
         payment_adapter=_build_payment_adapter(),
-        event_publisher=InMemoryEventPublisher(),
+        event_publisher=_build_event_publisher(),
     )
 
     @app.get("/health", response_model=HealthResponse)

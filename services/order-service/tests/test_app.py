@@ -58,6 +58,30 @@ def test_create_list_get_and_cancel_order(tmp_path: Path) -> None:
     assert cancel_response.json()["status"] == "CANCELLED"
 
 
+def test_order_events_use_notification_routing_keys(tmp_path: Path) -> None:
+    client = build_client(tmp_path)
+    headers = {"X-Customer-Id": "c-001"}
+
+    create_response = client.post(
+        "/api/v1/orders",
+        headers=headers,
+        json={
+            "currency": "USD",
+            "items": [{"product_id": "p-101", "quantity": 1}],
+        },
+    )
+    assert create_response.status_code == 201
+
+    order_id = create_response.json()["order_id"]
+    cancel_response = client.post(f"/api/v1/orders/{order_id}/cancel", headers=headers)
+    assert cancel_response.status_code == 200
+
+    events = client.app.state.order_service.event_publisher.events
+    event_names = [name for name, _ in events]
+    assert "order.OrderCreated" in event_names
+    assert "order.OrderCancelled" in event_names
+
+
 def test_missing_customer_header_is_rejected(tmp_path: Path) -> None:
     client = build_client(tmp_path)
 

@@ -42,7 +42,7 @@ Keeping it separate enforces the **Single Responsibility Principle** at the serv
 | REST (inbound) | ← API Gateway | — | **8002** | Customer-facing order commands and queries |
 | gRPC (outbound) | → Catalog Service | port 50051 | — | Synchronous basket validation before order is saved |
 | REST (outbound) | → Payment Service | port 8003 | — | Synchronous payment request after order is saved |
-| Events (outbound) | → broker/topic | — | — | `OrderCreated`, `OrderCancelled` for Notification and saga consumers |
+| Events (outbound) | → broker/topic | RabbitMQ (`ecom.events`) | — | `order.OrderCreated`, `order.OrderCancelled` for Notification and saga consumers |
 
 ---
 
@@ -103,7 +103,7 @@ Client → API Gateway → Order Service
                            │
                            ├─ POST /api/v1/payments → Payment Service
                            │
-                           └─ publish OrderCreated event → broker
+                           └─ publish order.OrderCreated event → broker
 ```
 
 ---
@@ -115,7 +115,7 @@ Client → API Gateway → Order Service
 | API Gateway | Order Service | REST | Command / Query | Sync | Single entry point; gateway handles JWT auth |
 | Order Service | Catalog Service | gRPC | Query | Sync | Stock and pricing must be confirmed before saving the order |
 | Order Service | Payment Service | REST | Command | Sync | Immediate checkout result needed for the order status |
-| Order Service | Notification Service | Event | Event | Async | Decoupled; notification can fail without affecting order persistence |
+| Order Service | Notification Service | Event (RabbitMQ topic) | Event | Async | Decoupled; notification can fail without affecting order persistence |
 
 **One-to-one vs one-to-many:** gRPC and REST calls are one-to-one. Event publication is one-to-many (any subscriber can consume `OrderCreated`).
 
@@ -145,8 +145,11 @@ Item names and prices are **snapshotted at checkout time** so future catalog cha
 
 | Event | When | Consumers |
 |-------|------|-----------|
-| `OrderCreated` | After order is persisted and payment is requested | Notification Service, saga consumers |
-| `OrderCancelled` | After a PENDING/CONFIRMED order is cancelled | Notification Service |
+| `order.OrderCreated` | After order is persisted and payment is requested | Notification Service, saga consumers |
+| `order.OrderCancelled` | After a PENDING/CONFIRMED order is cancelled | Notification Service |
+
+Notification Service currently subscribes to these routing keys from exchange `ecom.events`.
+To align with that integration, order-service should publish with the `order.` prefix.
 
 ---
 
@@ -167,8 +170,11 @@ Item names and prices are **snapshotted at checkout time** so future catalog cha
 | `CATALOG_GRPC_HOST` | No | — | Hostname of Catalog Service; enables real gRPC validation when set |
 | `CATALOG_GRPC_PORT` | No | `50051` | gRPC port of Catalog Service |
 | `PAYMENT_SERVICE_URL` | No | — | Base URL of Payment Service; enables real HTTP payment when set |
+| `RABBITMQ_URL` | No | — | RabbitMQ AMQP URL; enables real broker publishing when set |
+| `RABBITMQ_EXCHANGE` | No | `ecom.events` | Topic exchange used for order event routing |
 
 When `CATALOG_GRPC_HOST` or `PAYMENT_SERVICE_URL` are unset the service falls back to stub adapters, allowing fully independent local development and testing.
+When `RABBITMQ_URL` is unset, event publishing falls back to an in-memory adapter.
 
 ---
 

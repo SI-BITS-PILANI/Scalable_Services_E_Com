@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from decimal import Decimal
+import json
 from typing import List
 
 from app.schemas import OrderItemRequest, ValidatedBasket, ValidatedItem
@@ -147,6 +148,48 @@ class StubPaymentAdapter(PaymentPort):
 class EventPublisherPort:
     def publish(self, event_name: str, payload: dict[str, str]) -> None:
         raise NotImplementedError
+
+
+class RabbitMqEventPublisher(EventPublisherPort):
+    """RabbitMQ publisher for order domain events.
+
+    Publishes to a durable topic exchange (default: ecom.events).
+    Failures are intentionally swallowed so order persistence does not fail when
+    the broker is temporarily unavailable.
+    """
+
+    def __init__(self, amqp_url: str, exchange: str = "ecom.events") -> None:
+        self.amqp_url = amqp_url
+        self.exchange = exchange
+
+    def publish(self, event_name: str, payload: dict[str, str]) -> None:
+        try:
+            import pika
+
+            connection = pika.BlockingConnection(pika.URLParameters(self.amqp_url))
+            channel = connection.channel()
+            channel.exchange_declare(
+                exchange=self.exchange,
+                exchange_type="topic",
+                durable=True,
+            )
+
+            body = json.dumps(
+                {
+                    "event_type": event_name,
+                    "order_id": payload.get("order_id"),
+                    "customer_id": payload.get("customer_id"),
+                }
+            )
+            channel.basic_publish(
+                exchange=self.exchange,
+                routing_key=event_name,
+                body=body,
+                properties=pika.BasicProperties(delivery_mode=2),
+            )
+            connection.close()
+        except Exception as exc:
+            print(f"[order-service] event publish skipped for {event_name}: {exc}")
 
 
 PRICE_BOOK: dict[str, tuple[str, Decimal]] = {
