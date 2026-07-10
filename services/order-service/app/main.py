@@ -100,16 +100,28 @@ class OrderService:
             session.flush()
             session.refresh(order)
 
-            self.payment_adapter.request_payment(
+            self.event_publisher.publish(
+                "order.OrderCreated",
+                {"order_id": order.order_id, "customer_id": customer_id},
+            )
+
+            payment_result = self.payment_adapter.request_payment(
                 order_id=order.order_id,
                 customer_id=customer_id,
                 amount=Decimal(order.total),
                 currency=order.currency,
             )
-            self.event_publisher.publish(
-                "order.OrderCreated",
-                {"order_id": order.order_id, "customer_id": customer_id},
-            )
+
+            if payment_result.status.upper() in {"SUCCEEDED", "CAPTURED"}:
+                order.status = OrderStatus.PAID.value
+                session.add(order)
+                session.flush()
+                session.refresh(order)
+                self.event_publisher.publish(
+                    "order.OrderPaid",
+                    {"order_id": order.order_id, "customer_id": customer_id},
+                )
+
             return self._to_response(order)
 
     def list_orders(self, customer_id: str) -> list[OrderResponse]:

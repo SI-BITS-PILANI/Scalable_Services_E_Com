@@ -94,8 +94,15 @@ class PaymentPort:
         amount: Decimal,
         currency: str,
         method: str = "CARD",
-    ) -> None:
+    ) -> PaymentResult:
         raise NotImplementedError
+
+
+@dataclass
+class PaymentResult:
+    status: str
+    payment_id: str | None = None
+    transaction_ref: str | None = None
 
 
 class HttpPaymentAdapter(PaymentPort):
@@ -116,7 +123,7 @@ class HttpPaymentAdapter(PaymentPort):
         amount: Decimal,
         currency: str,
         method: str = "CARD",
-    ) -> None:
+    ) -> PaymentResult:
         payload = {
             "orderId": order_id,
             "customerId": customer_id,
@@ -129,6 +136,12 @@ class HttpPaymentAdapter(PaymentPort):
             raise ValueError(
                 f"Payment request failed: {response.status_code} {response.text}"
             )
+        body = response.json() if response.content else {}
+        return PaymentResult(
+            status=str(body.get("status", "UNKNOWN")),
+            payment_id=body.get("paymentId"),
+            transaction_ref=body.get("transactionRef"),
+        )
 
 
 class StubPaymentAdapter(PaymentPort):
@@ -141,8 +154,8 @@ class StubPaymentAdapter(PaymentPort):
         amount: Decimal = Decimal("0"),
         currency: str = "USD",
         method: str = "CARD",
-    ) -> None:
-        return None
+    ) -> PaymentResult:
+        return PaymentResult(status="SKIPPED")
 
 
 class EventPublisherPort:
