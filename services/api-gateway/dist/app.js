@@ -12,6 +12,7 @@ import { setupCatalogRoutes } from "./proxy/catalog.js";
 import { getCatalogProxyMiddleware } from "./proxy/catalog.js";
 import { setupOrderRoutes } from "./proxy/order.js";
 import { setupPaymentRoutes } from "./proxy/payment.js";
+import { getAggregatedHealth } from "./health/aggregator.js";
 export function createApp() {
     const app = express();
     const limiter = createRateLimiter();
@@ -32,6 +33,11 @@ export function createApp() {
     app.post("/api/v1/products", requireRole("admin"), getCatalogProxyMiddleware());
     setupOrderRoutes(app);
     setupPaymentRoutes(app);
+    app.get("/health/all", async (_request, response) => {
+        const aggregatedHealth = await getAggregatedHealth();
+        const statusCode = aggregatedHealth.overall === "ok" ? 200 : 503;
+        response.status(statusCode).json(aggregatedHealth);
+    });
     app.get("/health", (_request, response) => {
         response.status(200).json({
             service: "api-gateway",

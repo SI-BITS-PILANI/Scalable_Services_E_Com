@@ -382,6 +382,63 @@ export function createOpenApiSpec() {
                         }
                     }
                 },
+                "/health/all": {
+                    get: {
+                        summary: "Aggregated health of gateway and all downstream services",
+                        description: "Fan-out health checks to catalog, order, and payment services. Returns 200 if all healthy, 503 if any are degraded.",
+                        responses: {
+                            "200": {
+                                description: "All services healthy",
+                                content: {
+                                    "application/json": {
+                                        schema: {
+                                            type: "object",
+                                            properties: {
+                                                overall: {
+                                                    type: "string",
+                                                    enum: ["ok", "degraded", "down"]
+                                                },
+                                                timestamp: { type: "string" },
+                                                services: {
+                                                    type: "object",
+                                                    properties: {
+                                                        catalog: {
+                                                            type: "object",
+                                                            properties: {
+                                                                status: { type: "string" },
+                                                                latencyMs: { type: "integer" },
+                                                                error: { type: "string" }
+                                                            }
+                                                        },
+                                                        order: {
+                                                            type: "object",
+                                                            properties: {
+                                                                status: { type: "string" },
+                                                                latencyMs: { type: "integer" },
+                                                                error: { type: "string" }
+                                                            }
+                                                        },
+                                                        payment: {
+                                                            type: "object",
+                                                            properties: {
+                                                                status: { type: "string" },
+                                                                latencyMs: { type: "integer" },
+                                                                error: { type: "string" }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            "503": {
+                                description: "One or more services are unhealthy"
+                            }
+                        }
+                    }
+                },
                 "/health": {
                     get: {
                         summary: "Gateway health",
