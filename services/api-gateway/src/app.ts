@@ -13,6 +13,9 @@ import { getCatalogProxyMiddleware } from "./proxy/catalog.js";
 import { setupOrderRoutes } from "./proxy/order.js";
 import { setupPaymentRoutes } from "./proxy/payment.js";
 import { getAggregatedHealth } from "./health/aggregator.js";
+import graphqlHTTP from "express-graphql";
+import { graphqlSchema } from "./graphql/schema.js";
+import { createGraphQLContext } from "./graphql/resolvers.js";
 
 export function createApp() {
   const app = express();
@@ -42,6 +45,18 @@ export function createApp() {
   setupOrderRoutes(app);
 
   setupPaymentRoutes(app);
+
+  // GraphQL endpoint with dynamic context per request
+  app.use(
+    "/graphql",
+    (request: any, response: any, next: any) => {
+      (graphqlHTTP as any)({
+        schema: graphqlSchema,
+        context: createGraphQLContext(request),
+        graphiql: true
+      })(request, response, next);
+    }
+  );
 
   app.get("/health/all", async (_request, response) => {
     const aggregatedHealth = await getAggregatedHealth();

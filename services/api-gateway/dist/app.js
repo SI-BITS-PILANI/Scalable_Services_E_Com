@@ -13,6 +13,9 @@ import { getCatalogProxyMiddleware } from "./proxy/catalog.js";
 import { setupOrderRoutes } from "./proxy/order.js";
 import { setupPaymentRoutes } from "./proxy/payment.js";
 import { getAggregatedHealth } from "./health/aggregator.js";
+import graphqlHTTP from "express-graphql";
+import { graphqlSchema } from "./graphql/schema.js";
+import { createGraphQLContext } from "./graphql/resolvers.js";
 export function createApp() {
     const app = express();
     const limiter = createRateLimiter();
@@ -33,6 +36,14 @@ export function createApp() {
     app.post("/api/v1/products", requireRole("admin"), getCatalogProxyMiddleware());
     setupOrderRoutes(app);
     setupPaymentRoutes(app);
+    // GraphQL endpoint with dynamic context per request
+    app.use("/graphql", (request, response, next) => {
+        graphqlHTTP({
+            schema: graphqlSchema,
+            context: createGraphQLContext(request),
+            graphiql: true
+        })(request, response, next);
+    });
     app.get("/health/all", async (_request, response) => {
         const aggregatedHealth = await getAggregatedHealth();
         const statusCode = aggregatedHealth.overall === "ok" ? 200 : 503;

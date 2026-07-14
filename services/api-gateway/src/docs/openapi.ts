@@ -440,6 +440,73 @@ export function createOpenApiSpec() {
             }
           }
         },
+        "/graphql": {
+          post: {
+            summary: "GraphQL endpoint (Phase A: read-only)",
+            description: "Compose queries across catalog and order services. Requires authentication via Bearer token.",
+            security: [{ bearerAuth: [] }],
+            requestBody: {
+              required: true,
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    properties: {
+                      query: {
+                        type: "string",
+                        description: "GraphQL query string",
+                        example: "{ products { id name price } customerOrders { id status } }"
+                      },
+                      variables: {
+                        type: "object",
+                        description: "GraphQL variables (optional)"
+                      }
+                    },
+                    required: ["query"]
+                  }
+                }
+              }
+            },
+            responses: {
+              "200": {
+                description: "GraphQL response with data or errors",
+                content: {
+                  "application/json": {
+                    schema: {
+                      type: "object",
+                      properties: {
+                        data: {
+                          type: "object",
+                          description: "Query results"
+                        },
+                        errors: {
+                          type: "array",
+                          description: "GraphQL errors if any"
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "401": {
+                description: "Missing or invalid bearer token"
+              }
+            }
+          },
+          get: {
+            summary: "GraphQL UI (playground)",
+            description: "Interactive GraphQL explorer (GraphiQL) with token required",
+            security: [{ bearerAuth: [] }],
+            responses: {
+              "200": {
+                description: "GraphQL playground HTML"
+              },
+              "401": {
+                description: "Missing or invalid bearer token"
+              }
+            }
+          }
+        },
         "/health": {
           get: {
             summary: "Gateway health",
