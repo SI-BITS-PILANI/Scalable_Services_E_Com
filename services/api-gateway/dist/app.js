@@ -16,6 +16,7 @@ import { getAggregatedHealth } from "./health/aggregator.js";
 import graphqlHTTP from "express-graphql";
 import { graphqlSchema } from "./graphql/schema.js";
 import { createGraphQLContext } from "./graphql/resolvers.js";
+import { errorHandler } from "./errors/errorHandler.js";
 export function createApp() {
     const app = express();
     const limiter = createRateLimiter();
@@ -55,5 +56,7 @@ export function createApp() {
             status: "ok"
         });
     });
+    // Global error handler (must be last)
+    app.use(errorHandler);
     return app;
 }

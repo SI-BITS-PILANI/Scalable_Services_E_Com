@@ -1,5 +1,6 @@
 import { createProxyMiddleware } from "http-proxy-middleware";
 import { config } from "../config.js";
+import { createErrorResponse, mapErrorToStatusCode } from "../errors/errorHandler.js";
 export function getPaymentProxyMiddleware() {
     return createProxyMiddleware({
         target: config.PAYMENT_BASE_URL,
@@ -14,12 +15,9 @@ export function getPaymentProxyMiddleware() {
             },
             error: (err, _request, response) => {
                 console.error(`[payment-proxy] Error: ${err.message}`);
-                response.status?.(502).json?.({
-                    error: {
-                        code: "PAYMENT_SERVICE_ERROR",
-                        message: "Failed to reach payment service"
-                    }
-                });
+                const { statusCode, code, message } = mapErrorToStatusCode(err);
+                const errorResponse = createErrorResponse(code, message, statusCode, "/api/v1/payments");
+                response.status?.(statusCode).json?.(errorResponse);
             }
         }
     });

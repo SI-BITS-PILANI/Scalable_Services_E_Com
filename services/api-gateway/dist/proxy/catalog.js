@@ -1,5 +1,6 @@
 import { createProxyMiddleware } from "http-proxy-middleware";
 import { config } from "../config.js";
+import { createErrorResponse, mapErrorToStatusCode } from "../errors/errorHandler.js";
 export function getCatalogProxyMiddleware() {
     return createProxyMiddleware({
         target: config.CATALOG_BASE_URL,
@@ -14,12 +15,9 @@ export function getCatalogProxyMiddleware() {
             },
             error: (err, _request, response) => {
                 console.error(`[catalog-proxy] Error: ${err.message}`);
-                response.status?.(502).json?.({
-                    error: {
-                        code: "CATALOG_SERVICE_ERROR",
-                        message: "Failed to reach catalog service"
-                    }
-                });
+                const { statusCode, code, message } = mapErrorToStatusCode(err);
+                const errorResponse = createErrorResponse(code, message, statusCode, "/api/v1/products");
+                response.status?.(statusCode).json?.(errorResponse);
             }
         }
     });

@@ -1,5 +1,6 @@
 import { createProxyMiddleware } from "http-proxy-middleware";
 import { config } from "../config.js";
+import { createErrorResponse, mapErrorToStatusCode } from "../errors/errorHandler.js";
 /**
  * Middleware to inject X-Customer-Id header from JWT claim into upstream request
  * The X-Customer-Id is extracted from the JWT's 'sub' claim (customer ID)
@@ -34,12 +35,9 @@ export function getOrderProxyMiddleware() {
             },
             error: (err, _request, response) => {
                 console.error(`[order-proxy] Error: ${err.message}`);
-                response.status?.(502).json?.({
-                    error: {
-                        code: "ORDER_SERVICE_ERROR",
-                        message: "Failed to reach order service"
-                    }
-                });
+                const { statusCode, code, message } = mapErrorToStatusCode(err);
+                const errorResponse = createErrorResponse(code, message, statusCode, "/api/v1/orders");
+                response.status?.(statusCode).json?.(errorResponse);
             }
         }
     });
