@@ -1,0 +1,67 @@
+import { createProxyMiddleware } from "http-proxy-middleware";
+import type { Router, Request, Response, NextFunction } from "express";
+import { config } from "../config.js";
+import type { AuthenticatedUser } from "../auth/types.js";
+
+/**
+ * Middleware to inject X-Customer-Id header from JWT claim into upstream request
+ * The X-Customer-Id is extracted from the JWT's 'sub' claim (customer ID)
+ */
+export function injectCustomerIdHeader(
+  request: Request,
+  _response: Response,
+  next: NextFunction
+) {
+  const user = request.user as AuthenticatedUser | undefined;
+  if (user?.sub) {
+    // Attach to request so proxy middleware can access it
+    (request as any).customerId = user.sub;
+  }
+  next();
+}
+
+export function getOrderProxyMiddleware() {
+  return createProxyMiddleware({
+    target: config.ORDER_BASE_URL,
+    changeOrigin: true,
+    pathRewrite: {
+      "^/api/": "/api/"
+    },
+    on: {
+      proxyReq: (proxyReq, request: any) => {
+        const path = (request as any).path || (request as any).originalUrl || "?";
+        const customerId = (request as any).customerId;
+        
+        // Inject X-Customer-Id header into the upstream request
+        if (customerId) {
+          proxyReq.setHeader("X-Customer-Id", customerId);
+          console.log(`[order-proxy] ${request.method} ${path} -> ${config.ORDER_BASE_URL}${path} (X-Customer-Id: ${customerId})`);
+        } else {
+          console.log(`[order-proxy] ${request.method} ${path} -> ${config.ORDER_BASE_URL}${path} (WARNING: No X-Customer-Id)`);
+        }
+      },
+      error: (err, _request, response: any) => {
+        console.error(`[order-proxy] Error: ${err.message}`);
+        response.status?.(502).json?.({
+          error: {
+            code: "ORDER_SERVICE_ERROR",
+            message: "Failed to reach order service"
+          }
+        });
+      }
+    }
+  });
+}
+
+export function setupOrderRoutes(app: Router) {
+  // All order routes require authentication (to extract customer ID from JWT)
+  // injectCustomerIdHeader middleware attaches customerId to request
+  const orderProxy = getOrderProxyMiddleware();
+
+  app.get("/api/v1/orders", injectCustomerIdHeader, orderProxy);
+  app.post("/api/v1/orders", injectCustomerIdHeader, orderProxy);
+  app.get("/api/v1/orders/:orderId", injectCustomerIdHeader, orderProxy);
+  app.patch("/api/v1/orders/:orderId", injectCustomerIdHeader, orderProxy);
+  app.delete("/api/v1/orders/:orderId", injectCustomerIdHeader, orderProxy);
+  app.post("/api/v1/orders/:orderId/cancel", injectCustomerIdHeader, orderProxy);
+}

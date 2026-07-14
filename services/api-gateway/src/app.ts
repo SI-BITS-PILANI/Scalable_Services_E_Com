@@ -6,7 +6,12 @@ import swaggerUi from "swagger-ui-express";
 import { authMeHandler, loginHandler } from "./auth/handlers.js";
 import { createOpenApiSpec } from "./docs/openapi.js";
 import { authMiddleware } from "./middleware/auth.js";
+import { requireRole } from "./middleware/authorization.js";
 import { createRateLimiter } from "./middleware/rateLimit.js";
+import { setupCatalogRoutes } from "./proxy/catalog.js";
+import { getCatalogProxyMiddleware } from "./proxy/catalog.js";
+import { setupOrderRoutes } from "./proxy/order.js";
+import { setupPaymentRoutes } from "./proxy/payment.js";
 
 export function createApp() {
   const app = express();
@@ -29,6 +34,13 @@ export function createApp() {
   app.post("/auth/login", loginHandler);
   app.use(authMiddleware);
   app.get("/auth/me", authMeHandler);
+
+  setupCatalogRoutes(app);
+  app.post("/api/v1/products", requireRole("admin"), getCatalogProxyMiddleware());
+
+  setupOrderRoutes(app);
+
+  setupPaymentRoutes(app);
 
   app.get("/health", (_request, response) => {
     response.status(200).json({
