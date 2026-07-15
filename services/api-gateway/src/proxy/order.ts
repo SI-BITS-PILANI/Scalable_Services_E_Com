@@ -3,6 +3,7 @@ import type { Router, Request, Response, NextFunction } from "express";
 import { config } from "../config.js";
 import type { AuthenticatedUser } from "../auth/types.js";
 import { createErrorResponse, mapErrorToStatusCode } from "../errors/errorHandler.js";
+import { forwardJsonBody } from "./forwardBody.js";
 
 /**
  * Middleware to inject X-Customer-Id header from JWT claim into upstream request
@@ -36,8 +37,10 @@ export function getOrderProxyMiddleware() {
         // Inject X-Customer-Id header into the upstream request
         if (customerId) {
           proxyReq.setHeader("X-Customer-Id", customerId);
+          forwardJsonBody(proxyReq, request);
           console.log(`[order-proxy] ${request.method} ${path} -> ${config.ORDER_BASE_URL}${path} (X-Customer-Id: ${customerId})`);
         } else {
+          forwardJsonBody(proxyReq, request);
           console.log(`[order-proxy] ${request.method} ${path} -> ${config.ORDER_BASE_URL}${path} (WARNING: No X-Customer-Id)`);
         }
       },

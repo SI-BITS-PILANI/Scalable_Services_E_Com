@@ -2,6 +2,7 @@ import { createProxyMiddleware } from "http-proxy-middleware";
 import type { Router } from "express";
 import { config } from "../config.js";
 import { createErrorResponse, mapErrorToStatusCode } from "../errors/errorHandler.js";
+import { forwardJsonBody } from "./forwardBody.js";
 
 export function getPaymentProxyMiddleware() {
   return createProxyMiddleware({
@@ -13,6 +14,7 @@ export function getPaymentProxyMiddleware() {
     on: {
       proxyReq: (proxyReq, request: any) => {
         const path = (request as any).path || (request as any).originalUrl || "?";
+        forwardJsonBody(proxyReq, request);
         console.log(`[payment-proxy] ${request.method} ${path} -> ${config.PAYMENT_BASE_URL}${path}`);
       },
       error: (err, _request, response: any) => {

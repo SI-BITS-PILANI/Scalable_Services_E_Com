@@ -29,7 +29,12 @@ class GrpcCatalogAdapter(CatalogPort):
         # the stubs being present (e.g. during local test runs without Docker).
         try:
             import grpc
-            from app.proto import catalog_pb2, catalog_pb2_grpc
+            try:
+                from app.proto import catalog_pb2, catalog_pb2_grpc
+            except ImportError:
+                # Docker build may generate stubs at /app (top-level modules).
+                import catalog_pb2  # type: ignore[import-not-found]
+                import catalog_pb2_grpc  # type: ignore[import-not-found]
 
             self._grpc = grpc
             self._pb2 = catalog_pb2

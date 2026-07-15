@@ -2,6 +2,7 @@ import { createProxyMiddleware } from "http-proxy-middleware";
 import type { Router } from "express";
 import { config } from "../config.js";
 import { createErrorResponse, mapErrorToStatusCode } from "../errors/errorHandler.js";
+import { forwardJsonBody } from "./forwardBody.js";
 
 export function getCatalogProxyMiddleware() {
   return createProxyMiddleware({
@@ -13,6 +14,7 @@ export function getCatalogProxyMiddleware() {
     on: {
       proxyReq: (proxyReq, request) => {
         const path = (request as any).path || (request as any).originalUrl || "?";
+        forwardJsonBody(proxyReq, request);
         console.log(`[catalog-proxy] ${request.method} ${path} -> ${config.CATALOG_BASE_URL}${path}`);
       },
       error: (err, _request, response: any) => {

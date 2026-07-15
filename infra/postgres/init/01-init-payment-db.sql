@@ -1,4 +1,12 @@
--- Create the payments table first so the service has a stable schema to build on.
+-- Dedicated credentials + database for payment-service.
+CREATE USER payment_user WITH PASSWORD 'payment_password';
+CREATE DATABASE payment_db OWNER payment_user;
+
+\c payment_db
+
+SET ROLE payment_user;
+
+-- Create the payments table so the service has a stable schema to build on.
 CREATE TABLE IF NOT EXISTS payments (
   payment_id VARCHAR(50) PRIMARY KEY,
   order_id VARCHAR(50) NOT NULL,
@@ -42,3 +50,5 @@ FROM (
 WHERE NOT EXISTS (
   SELECT 1 FROM payments
 );
+
+RESET ROLE;

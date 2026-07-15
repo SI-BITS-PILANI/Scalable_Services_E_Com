@@ -12,6 +12,7 @@ import { setupCatalogRoutes } from "./proxy/catalog.js";
 import { getCatalogProxyMiddleware } from "./proxy/catalog.js";
 import { setupOrderRoutes } from "./proxy/order.js";
 import { setupPaymentRoutes } from "./proxy/payment.js";
+import { setupNotificationRoutes } from "./proxy/notification.js";
 import { getAggregatedHealth } from "./health/aggregator.js";
 import graphqlHTTP from "express-graphql";
 import { graphqlSchema } from "./graphql/schema.js";
@@ -46,6 +47,8 @@ export function createApp() {
   setupOrderRoutes(app);
 
   setupPaymentRoutes(app);
+
+  setupNotificationRoutes(app);
 
   // GraphQL endpoint with dynamic context per request
   app.use(

@@ -14,6 +14,7 @@ export interface AggregatedHealthResponse {
     catalog: ServiceHealthResult;
     order: ServiceHealthResult;
     payment: ServiceHealthResult;
+    notification: ServiceHealthResult;
   };
 }
 
@@ -59,22 +60,25 @@ async function checkServiceHealth(
  * Aggregate health status from all downstream services
  */
 export async function getAggregatedHealth(): Promise<AggregatedHealthResponse> {
-  // Fan-out calls to all three services in parallel
-  const [catalogHealth, orderHealth, paymentHealth] = await Promise.all([
+  // Fan-out calls to all downstream services in parallel
+  const [catalogHealth, orderHealth, paymentHealth, notificationHealth] = await Promise.all([
     checkServiceHealth("catalog", config.CATALOG_BASE_URL),
     checkServiceHealth("order", config.ORDER_BASE_URL),
-    checkServiceHealth("payment", config.PAYMENT_BASE_URL)
+    checkServiceHealth("payment", config.PAYMENT_BASE_URL),
+    checkServiceHealth("notification", config.NOTIFICATION_BASE_URL)
   ]);
 
   // Determine overall status
   const allHealthy =
     catalogHealth.status === "ok" &&
     orderHealth.status === "ok" &&
-    paymentHealth.status === "ok";
+    paymentHealth.status === "ok" &&
+    notificationHealth.status === "ok";
   const anyDown =
     catalogHealth.status === "down" ||
     orderHealth.status === "down" ||
-    paymentHealth.status === "down";
+    paymentHealth.status === "down" ||
+    notificationHealth.status === "down";
 
   const overallStatus: "ok" | "degraded" | "down" = allHealthy
     ? "ok"
@@ -88,7 +92,8 @@ export async function getAggregatedHealth(): Promise<AggregatedHealthResponse> {
     services: {
       catalog: catalogHealth,
       order: orderHealth,
-      payment: paymentHealth
+      payment: paymentHealth,
+      notification: notificationHealth
     }
   };
 }
