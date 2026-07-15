@@ -15,6 +15,10 @@ services:
       PAYMENT_DB_NAME: payment_db
       PAYMENT_DB_USER: payment_user
       PAYMENT_DB_PASSWORD: payment_password
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      RABBITMQ_EXCHANGE: ecom.events
+      RABBITMQ_ORDER_CREATED_QUEUE: payment.order-created.queue
+      RABBITMQ_ORDER_CREATED_KEY: order.OrderCreated
     ports:
       - "8003:8003"
 
