@@ -96,10 +96,10 @@ Error example:
 - Command: `POST /api/v1/payments` (initiate payment)
 - Query: `GET /api/v1/payments/{paymentId}`
 - Events published:
-  - `PaymentAuthorized`
-  - `PaymentCaptured`
-  - `PaymentFailed`
-  - `PaymentRefunded` (if refund flow is implemented)
+  - `payment.PaymentAuthorized`
+  - `payment.PaymentCaptured`
+  - `payment.PaymentFailed`
+  - `payment.PaymentRefunded` (if refund flow is implemented)
 
 ## 4) Saga Pattern (Choreography-Based)
 
@@ -107,16 +107,16 @@ This service follows a choreography-based Saga using complimentary events.
 No central orchestrator is required.
 
 ### Happy path
-1. Order Service publishes `OrderCreated`.
-2. Payment Service consumes `OrderCreated` and attempts payment.
-3. Payment Service publishes `PaymentCaptured`.
-4. Order Service consumes `PaymentCaptured` and marks order as `PAID`.
+1. Order Service publishes `order.OrderCreated`.
+2. Payment Service consumes `order.OrderCreated` and attempts payment.
+3. Payment Service publishes `payment.PaymentCaptured`.
+4. Order Service consumes `payment.PaymentCaptured` and marks order as `PAID`.
 5. Notification Service consumes payment/order events and notifies the customer.
 
 ### Failure/compensation path
 1. Payment Service fails authorization/capture.
-2. Payment Service publishes `PaymentFailed`.
-3. Order Service consumes `PaymentFailed` and transitions order to `CANCELLED` (or `PAYMENT_FAILED`).
+2. Payment Service publishes `payment.PaymentFailed`.
+3. Order Service consumes `payment.PaymentFailed` and transitions order to `CANCELLED` (or `PAYMENT_FAILED`).
 4. Notification Service informs customer about failure.
 
 ### Why choreography is suitable here
@@ -210,7 +210,10 @@ docker run --name payment-service \
   -p 8003:8003 \
   -e PORT=8003 \
   -e PAYMENT_DB_URL=postgres://postgres:postgres@host.docker.internal:5432/payment_db \
-  -e BROKER_URL=amqp://host.docker.internal:5672 \
+  -e RABBITMQ_URL=amqp://guest:guest@host.docker.internal:5672/ \
+  -e RABBITMQ_EXCHANGE=ecom.events \
+  -e RABBITMQ_ORDER_CREATED_QUEUE=payment.order-created.queue \
+  -e RABBITMQ_ORDER_CREATED_KEY=order.OrderCreated \
   payment-service:1.0.0
 ```
 
@@ -306,6 +309,6 @@ This README helps cover:
 
 For the final report and demos, include:
 - Architecture diagram with Payment Service interactions.
-- Event flow screenshot/logs for `OrderCreated -> PaymentCaptured` and failure path.
+- Event flow screenshot/logs for `order.OrderCreated -> payment.PaymentCaptured` and failure path.
 - Separate container screenshot showing payment-service running independently.
 - Repository link for this service and contribution notes by team members.
