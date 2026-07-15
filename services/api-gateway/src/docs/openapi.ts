@@ -35,7 +35,32 @@ export function createOpenApiSpec() {
             },
             responses: {
               "200": {
-                description: "Token issued"
+                description: "Token issued",
+                content: {
+                  "application/json": {
+                    schema: {
+                      type: "object",
+                      properties: {
+                        access_token: { type: "string", example: "eyJhbGciOi..." },
+                        token_type: { type: "string", example: "Bearer" },
+                        expires_in: { type: "integer", example: 3600 },
+                        user: {
+                          type: "object",
+                          properties: {
+                            id: { type: "string", example: "c-001" },
+                            username: { type: "string", example: "alice" },
+                            roles: {
+                              type: "array",
+                              items: { type: "string" },
+                              example: ["customer"]
+                            }
+                          }
+                        }
+                      },
+                      required: ["access_token", "token_type", "expires_in", "user"]
+                    }
+                  }
+                }
               },
               "400": {
                 description: "Invalid login payload"
@@ -116,17 +141,21 @@ export function createOpenApiSpec() {
                 "application/json": {
                   schema: {
                     type: "object",
+                    required: ["items"],
                     properties: {
                       items: {
                         type: "array",
+                        minItems: 1,
                         items: {
                           type: "object",
+                          required: ["product_id", "quantity"],
                           properties: {
-                            productId: { type: "string" },
+                            product_id: { type: "string", example: "p1001" },
                             quantity: { type: "integer" }
                           }
                         }
-                      }
+                      },
+                      currency: { type: "string", example: "USD" }
                     }
                   }
                 }
@@ -386,7 +415,8 @@ export function createOpenApiSpec() {
         "/health/all": {
           get: {
             summary: "Aggregated health of gateway and all downstream services",
-            description: "Fan-out health checks to catalog, order, and payment services. Returns 200 if all healthy, 503 if any are degraded.",
+            description: "Fan-out health checks to catalog, order, payment, and notification services. Returns 200 if all healthy, 503 if any are degraded.",
+            security: [{ bearerAuth: [] }],
             responses: {
               "200": {
                 description: "All services healthy",
@@ -426,6 +456,14 @@ export function createOpenApiSpec() {
                                 latencyMs: { type: "integer" },
                                 error: { type: "string" }
                               }
+                            },
+                            notification: {
+                              type: "object",
+                              properties: {
+                                status: { type: "string" },
+                                latencyMs: { type: "integer" },
+                                error: { type: "string" }
+                              }
                             }
                           }
                         }
@@ -433,6 +471,9 @@ export function createOpenApiSpec() {
                     }
                   }
                 }
+              },
+              "401": {
+                description: "Missing or invalid bearer token"
               },
               "503": {
                 description: "One or more services are unhealthy"

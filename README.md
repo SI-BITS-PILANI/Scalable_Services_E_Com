@@ -42,6 +42,8 @@ docker compose ps
 curl -X POST http://localhost:8000/auth/login \
 	-H "Content-Type: application/json" \
 	-d '{"username":"alice","password":"password123"}'
+
+# Use the `access_token` field from the login response as <token>.
 ```
 
 2. Use token for protected APIs:
@@ -52,7 +54,7 @@ curl http://localhost:8000/api/v1/products -H "Authorization: Bearer <token>"
 curl -X POST http://localhost:8000/api/v1/orders \
 	-H "Authorization: Bearer <token>" \
 	-H "Content-Type: application/json" \
-	-d '{"items":[{"product_id":"p1001","quantity":1}]}'
+	-d '{"items":[{"product_id":"p1001","quantity":1}],"currency":"USD"}'
 curl http://localhost:8000/api/v1/orders -H "Authorization: Bearer <token>"
 curl http://localhost:8000/api/v1/notifications -H "Authorization: Bearer <token>"
 ```

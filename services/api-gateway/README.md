@@ -26,9 +26,17 @@ curl -s -X POST http://localhost:8000/auth/login \
   -H "Content-Type: application/json" \
   -d '{"username":"alice","password":"password123"}'
 
+# The bearer token is returned as the `access_token` field.
+
 # 2) call a protected route
 curl -s http://localhost:8000/api/v1/orders \
   -H "Authorization: Bearer <token>"
+
+# 3) create an order (snake_case contract)
+curl -s -X POST http://localhost:8000/api/v1/orders \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"items":[{"product_id":"p1001","quantity":1}],"currency":"USD"}'
 ```
 
 ## Routing map
