@@ -155,7 +155,12 @@ export function createOpenApiSpec() {
                           }
                         }
                       },
-                      currency: { type: "string", example: "USD" }
+                      currency: { type: "string", example: "USD" },
+                      method: {
+                        type: "string",
+                        example: "CARD",
+                        description: "Payment method hint forwarded in the order.OrderCreated event (default: CARD)"
+                      }
                     }
                   }
                 }

@@ -77,12 +77,15 @@ All authenticated routes expect the customer identity in the `X-Customer-Id` hea
 ```json
 {
   "currency": "USD",
+  "method": "CARD",
   "items": [
     { "product_id": "p-101", "quantity": 2 },
     { "product_id": "p-102", "quantity": 1 }
   ]
 }
 ```
+
+> `method` is optional and defaults to `"CARD"`. Accepted values include `CARD`, `UPI`, `NET_BANKING`. It is forwarded as-is in the `order.OrderCreated` event payload so Payment Service can use it for routing.
 
 ### Create order — response (201)
 

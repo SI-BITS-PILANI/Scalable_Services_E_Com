@@ -50,11 +50,11 @@ curl -X POST http://localhost:8000/auth/login \
 
 ```bash
 curl http://localhost:8000/health/all -H "Authorization: Bearer <token>"
-curl http://localhost:8000/api/v1/products -H "Authorization: Bearer <token>"
+curl http://localhost:8000/api/v1/products   # public — no token required
 curl -X POST http://localhost:8000/api/v1/orders \
 	-H "Authorization: Bearer <token>" \
 	-H "Content-Type: application/json" \
-	-d '{"items":[{"product_id":"p1001","quantity":1}],"currency":"USD"}'
+	-d '{"items":[{"product_id":"p1001","quantity":1}],"currency":"USD","method":"CARD"}'
 curl http://localhost:8000/api/v1/orders -H "Authorization: Bearer <token>"
 curl http://localhost:8000/api/v1/notifications -H "Authorization: Bearer <token>"
 ```
