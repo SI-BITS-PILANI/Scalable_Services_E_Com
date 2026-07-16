@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -10,7 +11,20 @@ from app.main import create_app
 
 def build_client(tmp_path: Path) -> TestClient:
     database_url = f"sqlite:///{tmp_path / 'order-service.db'}"
-    return TestClient(create_app(database_url=database_url))
+    # Force stub adapters: unset env vars that trigger real gRPC/RabbitMQ clients.
+    # Tests must be isolated from live infrastructure.
+    env_overrides = {
+        "CATALOG_GRPC_HOST": "",
+        "PAYMENT_SERVICE_URL": "",
+        "RABBITMQ_URL": "",
+    }
+    original = {k: os.environ.pop(k, None) for k in env_overrides}
+    try:
+        return TestClient(create_app(database_url=database_url))
+    finally:
+        for k, v in original.items():
+            if v is not None:
+                os.environ[k] = v
 
 
 def test_health_endpoint(tmp_path: Path) -> None:
