@@ -13,12 +13,20 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
 
+from config import settings
 from database import products_collection
+from events import CatalogEventBus
 from grpc_server import serve_grpc
 from models import ProductCreate
 from seed import seed_products
 
 grpc_server = None
+event_bus = CatalogEventBus(
+    amqp_url=settings.rabbitmq_url,
+    exchange=settings.rabbitmq_exchange,
+    queue_name=settings.rabbitmq_queue,
+    binding_keys=settings.rabbitmq_binding_keys.split(","),
+)
 
 
 @asynccontextmanager
@@ -26,6 +34,7 @@ async def lifespan(app: FastAPI):
     await seed_products()
     global grpc_server
     grpc_server = await serve_grpc()
+    event_bus.ensure_topology()
     yield
     if grpc_server is not None:
         await grpc_server.stop(grace=2)
@@ -72,7 +81,9 @@ async def create_product(payload: ProductCreate):
     doc = payload.model_dump()
     doc["product_id"] = pid
     await products_collection.insert_one(doc)
-    return serialize(doc)
+    response = serialize(doc)
+    event_bus.publish("catalog.ProductCreated", response)
+    return response
 
 
 # ----------------------------- API v2 -------------------------------------

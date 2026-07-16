@@ -28,6 +28,16 @@ Owns the **product catalog** (`catalog_db` in its own MongoDB).
 - `ValidateProducts(items[]) -> {all_available, items[], total}`
 - `GetProduct(product_id) -> Product`
 
+## Event Bus Integration (RabbitMQ)
+- Exchange: `ecom.events` (topic, durable)
+- Catalog queue: `catalog-service.queue` (durable)
+- Binding keys: `catalog.*`
+- Published event (current): `catalog.ProductCreated` on product creation
+
+When `RABBITMQ_URL` is configured, catalog service declares the exchange/queue
+on startup so the queue appears in RabbitMQ UI, and publishes catalog domain
+events for downstream consumers.
+
 ## Data ownership
 This is the **only** service that connects to `catalog_db`. Other services
 obtain catalog data exclusively through the APIs above.
