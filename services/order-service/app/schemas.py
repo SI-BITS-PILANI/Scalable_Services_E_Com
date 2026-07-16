@@ -18,6 +18,7 @@ class OrderItemRequest(BaseModel):
 class CreateOrderRequest(BaseModel):
     items: list[OrderItemRequest] = Field(min_length=1)
     currency: str = Field(default="USD", min_length=3, max_length=8)
+    method: str = Field(default="CARD", min_length=3, max_length=20)
 
 
 class OrderItemResponse(BaseModel):

@@ -19,6 +19,7 @@ from app.adapters import (
     StubPaymentAdapter,
 )
 from app.database import create_session_factory
+from app.events import create_payment_outcome_consumer
 from app.models import Base, OrderItemRecord, OrderRecord, OrderStatus
 from app.schemas import CreateOrderRequest, HealthResponse, OrderItemResponse, OrderResponse
 
@@ -102,25 +103,39 @@ class OrderService:
 
             self.event_publisher.publish(
                 "order.OrderCreated",
-                {"order_id": order.order_id, "customer_id": customer_id},
+                {
+                    "order_id": order.order_id,
+                    "customer_id": customer_id,
+                    "amount": float(order.total),
+                    "currency": order.currency,
+                    "method": request.method.upper(),
+                },
             )
 
-            payment_result = self.payment_adapter.request_payment(
-                order_id=order.order_id,
-                customer_id=customer_id,
-                amount=Decimal(order.total),
-                currency=order.currency,
-            )
-
-            if payment_result.status.upper() in {"SUCCEEDED", "CAPTURED"}:
-                order.status = OrderStatus.PAID.value
-                session.add(order)
-                session.flush()
-                session.refresh(order)
-                self.event_publisher.publish(
-                    "order.OrderPaid",
-                    {"order_id": order.order_id, "customer_id": customer_id},
+            sync_payment_enabled = os.getenv("ORDER_SYNC_PAYMENT_ENABLED", "false").lower() in {
+                "1",
+                "true",
+                "yes",
+                "on",
+            }
+            if sync_payment_enabled:
+                payment_result = self.payment_adapter.request_payment(
+                    order_id=order.order_id,
+                    customer_id=customer_id,
+                    amount=Decimal(order.total),
+                    currency=order.currency,
+                    method=request.method.upper(),
                 )
+
+                if payment_result.status.upper() in {"SUCCEEDED", "CAPTURED"}:
+                    order.status = OrderStatus.PAID.value
+                    session.add(order)
+                    session.flush()
+                    session.refresh(order)
+                    self.event_publisher.publish(
+                        "order.OrderPaid",
+                        {"order_id": order.order_id, "customer_id": customer_id},
+                    )
 
             return self._to_response(order)
 
@@ -214,6 +229,12 @@ def create_app(database_url: Optional[str] = None) -> FastAPI:
         payment_adapter=_build_payment_adapter(),
         event_publisher=_build_event_publisher(),
     )
+
+    # Start payment outcome consumer if RabbitMQ is configured
+    rabbitmq_url = os.getenv("RABBITMQ_URL")
+    if rabbitmq_url:
+        consumer_thread = create_payment_outcome_consumer(rabbitmq_url, session_factory)
+        consumer_thread.start()
 
     @app.get("/health", response_model=HealthResponse)
     def health() -> HealthResponse:

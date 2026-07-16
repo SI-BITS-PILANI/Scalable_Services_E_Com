@@ -20,7 +20,7 @@ It owns payment processing and payment status tracking for orders.
 - Authorize/capture payment through a provider adapter (mock or real gateway).
 - Persist payment transaction and status history.
 - Expose payment status APIs to other services through gateway.
-- Publish payment events for saga progression.
+- Publish payment outcome events for saga progression (`payment.PaymentCaptured`, `payment.PaymentFailed`).
 
 ## 2) API Design (Current: v1)
 
@@ -95,11 +95,9 @@ Error example:
 ### Command, Query, Event mapping
 - Command: `POST /api/v1/payments` (initiate payment)
 - Query: `GET /api/v1/payments/{paymentId}`
-- Events published:
-  - `payment.PaymentAuthorized`
+- Events published (current runtime):
   - `payment.PaymentCaptured`
   - `payment.PaymentFailed`
-  - `payment.PaymentRefunded` (if refund flow is implemented)
 
 ## 4) Saga Pattern (Choreography-Based)
 
@@ -119,6 +117,11 @@ No central orchestrator is required.
 3. Order Service consumes `payment.PaymentFailed` and transitions order to `CANCELLED` (or `PAYMENT_FAILED`).
 4. Notification Service informs customer about failure.
 
+### Consumer delivery semantics (current runtime)
+- Invalid `order.OrderCreated` payloads are acknowledged (non-retryable).
+- Technical persistence failures are rejected with requeue (`nack`) so RabbitMQ retries delivery.
+- Payment persistence is atomically idempotent using database uniqueness on `order_id` and conflict-safe insert (`ON CONFLICT`).
+
 ### Why choreography is suitable here
 - Loose coupling: services react to events without direct hard dependency.
 - Better fault isolation: temporary service outage does not fully block the flow.
@@ -137,10 +140,12 @@ Seed data decision:
 - We include a minimal demo seed so the team can show database state, query screenshots, and Swagger/demo flow before all POST APIs are implemented.
 - The seed runs only on first database creation; after that, the persisted volume keeps the existing data.
 
-Suggested owned entities:
-- `payments` (paymentId, orderId, customerId, amount, currency, method, status, providerRef, createdAt, updatedAt)
-- `payment_events` (eventId, paymentId, type, payload, publishedAt)
-- `idempotency_keys` (key, requestHash, responseSnapshot, createdAt)
+Current owned entities:
+- `payments` (paymentId, orderId, customerId, amount, currency, method, status, transactionRef, createdAt, updatedAt)
+
+Current idempotency guard:
+- Unique index on `payments.order_id`.
+- `INSERT ... ON CONFLICT (order_id) DO NOTHING` in the order-created consumer path.
 
 Only Payment Service accesses its payment DB directly.
 Other services must use APIs/events.

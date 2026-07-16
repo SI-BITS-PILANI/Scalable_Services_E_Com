@@ -1,6 +1,36 @@
 import amqplib from "amqplib";
 import { randomUUID } from "node:crypto";
 import { runQuery } from "../database.js";
+import { publishPaymentOutcomeEvent } from "./paymentEventPublisher.js";
+
+function determinePaymentOutcome(payload) {
+  const forcedFailureMethods = new Set(["FAIL", "DECLINED"]);
+  const isFailure = forcedFailureMethods.has(payload.method);
+
+  if (isFailure) {
+    return {
+      status: "FAILED",
+      eventType: "PaymentFailed",
+      reason: "PAYMENT_DECLINED"
+    };
+  }
+
+  return {
+    status: "SUCCEEDED",
+    eventType: "PaymentCaptured",
+    reason: null
+  };
+}
+
+function eventTypeFromPaymentStatus(status) {
+  if (status === "SUCCEEDED") {
+    return "PaymentCaptured";
+  }
+  if (status === "FAILED") {
+    return "PaymentFailed";
+  }
+  return null;
+}
 
 function parseAndValidateOrderCreatedMessage(messageBuffer) {
   let payload;
@@ -51,29 +81,11 @@ function parseAndValidateOrderCreatedMessage(messageBuffer) {
 }
 
 async function persistPaymentFromOrderCreatedEvent(payload) {
-  const existingPaymentResult = await runQuery(
-    `
-      SELECT payment_id, transaction_ref
-      FROM payments
-      WHERE order_id = $1
-      ORDER BY created_at DESC
-      LIMIT 1
-    `,
-    [payload.orderId]
-  );
-
-  if (existingPaymentResult.rows.length > 0) {
-    return {
-      paymentId: existingPaymentResult.rows[0].payment_id,
-      transactionRef: existingPaymentResult.rows[0].transaction_ref,
-      skipped: true
-    };
-  }
-
+  const outcome = determinePaymentOutcome(payload);
   const paymentId = `pay_${randomUUID().replace(/-/g, "").slice(0, 12)}`;
   const transactionRef = `txn_${randomUUID().replace(/-/g, "").slice(0, 12)}`;
 
-  await runQuery(
+  const insertResult = await runQuery(
     `
       INSERT INTO payments (
         payment_id,
@@ -86,6 +98,8 @@ async function persistPaymentFromOrderCreatedEvent(payload) {
         transaction_ref
       )
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      ON CONFLICT (order_id) DO NOTHING
+      RETURNING payment_id, transaction_ref
     `,
     [
       paymentId,
@@ -94,14 +108,38 @@ async function persistPaymentFromOrderCreatedEvent(payload) {
       payload.amount,
       payload.currency,
       payload.method,
-      "SUCCEEDED",
+      outcome.status,
       transactionRef
     ]
   );
 
+  if (insertResult.rows.length === 0) {
+    const existingPaymentResult = await runQuery(
+      `
+        SELECT payment_id, transaction_ref, status
+        FROM payments
+        WHERE order_id = $1
+        LIMIT 1
+      `,
+      [payload.orderId]
+    );
+
+    return {
+      paymentId: existingPaymentResult.rows[0]?.payment_id,
+      transactionRef: existingPaymentResult.rows[0]?.transaction_ref,
+      status: existingPaymentResult.rows[0]?.status || "UNKNOWN",
+      eventType: eventTypeFromPaymentStatus(existingPaymentResult.rows[0]?.status),
+      reason: null,
+      skipped: true
+    };
+  }
+
   return {
-    paymentId,
-    transactionRef,
+    paymentId: insertResult.rows[0].payment_id,
+    transactionRef: insertResult.rows[0].transaction_ref,
+    status: outcome.status,
+    eventType: outcome.eventType,
+    reason: outcome.reason,
     skipped: false
   };
 }
@@ -139,7 +177,7 @@ export async function startOrderCreatedConsumer(rabbitMqConfig) {
       );
 
       persistPaymentFromOrderCreatedEvent(payload)
-        .then((result) => {
+        .then(async (result) => {
           if (result.skipped) {
             console.info(
               `[payment-service] duplicate ${rabbitMqConfig.orderCreatedRoutingKey} skipped for order_id=${payload.orderId}; existing payment_id=${result.paymentId}`
@@ -148,12 +186,50 @@ export async function startOrderCreatedConsumer(rabbitMqConfig) {
             console.info(
               `[payment-service] payment persisted from ${rabbitMqConfig.orderCreatedRoutingKey}: payment_id=${result.paymentId}, order_id=${payload.orderId}`
             );
+
+            const eventPayload = {
+              order_id: payload.orderId,
+              customer_id: payload.customerId,
+              payment_id: result.paymentId,
+              transaction_ref: result.transactionRef,
+              status: result.status
+            };
+
+            if (result.reason) {
+              eventPayload.reason = result.reason;
+            }
+
+            if (result.eventType) {
+              await publishPaymentOutcomeEvent(
+                rabbitMqConfig,
+                result.eventType,
+                eventPayload
+              );
+            }
           }
+
+          if (result.skipped && result.eventType) {
+            const duplicateEventPayload = {
+              order_id: payload.orderId,
+              customer_id: payload.customerId,
+              payment_id: result.paymentId,
+              transaction_ref: result.transactionRef,
+              status: result.status
+            };
+            await publishPaymentOutcomeEvent(
+              rabbitMqConfig,
+              result.eventType,
+              duplicateEventPayload
+            );
+          }
+
           channel.ack(message);
         })
         .catch((error) => {
           console.error("[payment-service] failed to persist payment from order event:", error);
-          channel.ack(message);
+
+          // Technical persistence failures should be retried by RabbitMQ.
+          channel.nack(message, false, true);
         });
 
       return;
@@ -171,4 +247,8 @@ export async function startOrderCreatedConsumer(rabbitMqConfig) {
   };
 }
 
-export { parseAndValidateOrderCreatedMessage, persistPaymentFromOrderCreatedEvent };
+export {
+  determinePaymentOutcome,
+  parseAndValidateOrderCreatedMessage,
+  persistPaymentFromOrderCreatedEvent
+};

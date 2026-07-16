@@ -31,7 +31,8 @@ Keeping it separate enforces the **Single Responsibility Principle** at the serv
 - Accept an order request, validate the basket against Catalog Service, and persist an immutable order snapshot (product names, quantities, and prices captured at checkout time so later catalog changes never corrupt order history).
 - Manage order state transitions: `PENDING → CONFIRMED → PAID → CANCELLED`.
 - Expose order history and order detail for the authenticated customer.
-- Trigger a payment request to Payment Service after order creation.
+- Publish `order.OrderCreated` after order creation so Payment Service can process payment asynchronously.
+- Optionally trigger a synchronous payment request when `ORDER_SYNC_PAYMENT_ENABLED=true` (fallback mode).
 - Publish domain events (`OrderCreated`, `OrderPaid`, `OrderCancelled`) for downstream consumers such as Notification Service.
 
 ---
@@ -44,7 +45,7 @@ Keeping it separate enforces the **Single Responsibility Principle** at the serv
 | Database | PostgreSQL (`order_db`) | Strong consistency, ACID transactions, relational structure for order + line-items |
 | ORM | SQLAlchemy 2.x | Typed models, migrations-friendly |
 | gRPC client | grpcio 1.64 | Synchronous basket validation against Catalog Service |
-| HTTP client | httpx | Synchronous payment request against Payment Service |
+| HTTP client | httpx | Optional synchronous payment fallback when `ORDER_SYNC_PAYMENT_ENABLED=true` |
 
 ---
 
@@ -54,7 +55,7 @@ Keeping it separate enforces the **Single Responsibility Principle** at the serv
 |----------|-----------|--------|------|---------|
 | REST (inbound) | ← API Gateway | — | **8002** | Customer-facing order commands and queries |
 | gRPC (outbound) | → Catalog Service | port 50051 | — | Synchronous basket validation before order is saved |
-| REST (outbound) | → Payment Service | port 8003 | — | Synchronous payment request after order is saved |
+| REST (outbound) | → Payment Service | port 8003 | — | Optional synchronous payment fallback when enabled |
 | Events (outbound) | → broker/topic | RabbitMQ (`ecom.events`) | — | `order.OrderCreated`, `order.OrderPaid`, `order.OrderCancelled` for Notification and saga consumers |
 
 ---
@@ -114,9 +115,11 @@ Client → API Gateway → Order Service
                            │
                            ├─ persist order snapshot → order_db (PostgreSQL)
                            │
-                           ├─ POST /api/v1/payments → Payment Service
-                           │
                            └─ publish order.OrderCreated event → broker
+                               (Payment Service consumes and emits payment outcome events)
+
+Optional fallback (disabled by default):
+Order Service ── POST /api/v1/payments ──> Payment Service
 ```
 
 ---
@@ -127,10 +130,10 @@ Client → API Gateway → Order Service
 |------|----|----------|-------------|--------------|-----|
 | API Gateway | Order Service | REST | Command / Query | Sync | Single entry point; gateway handles JWT auth |
 | Order Service | Catalog Service | gRPC | Query | Sync | Stock and pricing must be confirmed before saving the order |
-| Order Service | Payment Service | REST | Command | Sync | Immediate checkout result needed for the order status |
+| Order Service | Payment Service | REST | Command | Sync (optional) | Fallback mode when `ORDER_SYNC_PAYMENT_ENABLED=true` |
 | Order Service | Notification Service | Event (RabbitMQ topic) | Event | Async | Decoupled; notification can fail without affecting order persistence |
 
-**One-to-one vs one-to-many:** gRPC and REST calls are one-to-one. Event publication is one-to-many (any subscriber can consume `OrderCreated`).
+**One-to-one vs one-to-many:** gRPC and optional REST fallback calls are one-to-one. Event publication is one-to-many (any subscriber can consume `OrderCreated`).
 
 **How coupling is reduced:** Catalog and Payment are accessed through *adapter ports* — swappable implementations controlled by environment variables. Tests use in-memory stubs; production uses real network adapters. Notification is fully decoupled via async events.
 
@@ -174,7 +177,7 @@ Item names and prices are **snapshotted at checkout time** so future catalog cha
 
 | Event | When | Consumers |
 |-------|------|-----------|
-| `order.OrderCreated` | After order is persisted and payment is requested | Notification Service, saga consumers |
+| `order.OrderCreated` | After order is persisted | Notification Service, saga consumers |
 | `order.OrderPaid` | After payment succeeds and order transitions to `PAID` | Notification Service, saga consumers |
 | `order.OrderCancelled` | After a PENDING/CONFIRMED order is cancelled | Notification Service |
 
@@ -200,10 +203,12 @@ To align with that integration, order-service should publish with the `order.` p
 | `CATALOG_GRPC_HOST` | No | — | Hostname of Catalog Service; enables real gRPC validation when set |
 | `CATALOG_GRPC_PORT` | No | `50051` | gRPC port of Catalog Service |
 | `PAYMENT_SERVICE_URL` | No | — | Base URL of Payment Service; enables real HTTP payment when set |
+| `ORDER_SYNC_PAYMENT_ENABLED` | No | `false` | Enables legacy synchronous payment call when set to `true` |
 | `RABBITMQ_URL` | No | — | RabbitMQ AMQP URL; enables real broker publishing when set |
 | `RABBITMQ_EXCHANGE` | No | `ecom.events` | Topic exchange used for order event routing |
 
-When `CATALOG_GRPC_HOST` or `PAYMENT_SERVICE_URL` are unset the service falls back to stub adapters, allowing fully independent local development and testing.
+When `CATALOG_GRPC_HOST` is unset the service falls back to a stub catalog adapter.
+When `PAYMENT_SERVICE_URL` is unset and `ORDER_SYNC_PAYMENT_ENABLED=true`, the service uses a stub payment adapter for the sync fallback path.
 When `RABBITMQ_URL` is unset, event publishing falls back to an in-memory adapter.
 
 ---

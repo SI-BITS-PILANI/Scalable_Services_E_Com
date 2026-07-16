@@ -1,6 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { parseAndValidateOrderCreatedMessage } from "../app/events/orderCreatedConsumer.js";
+import {
+  determinePaymentOutcome,
+  parseAndValidateOrderCreatedMessage
+} from "../app/events/orderCreatedConsumer.js";
 
 test("parseAndValidateOrderCreatedMessage accepts valid payload", () => {
   const message = Buffer.from(
@@ -45,4 +48,20 @@ test("parseAndValidateOrderCreatedMessage rejects invalid JSON", () => {
 
   assert.equal(result.error, "invalid JSON payload");
   assert.equal(result.payload, null);
+});
+
+test("determinePaymentOutcome returns success for normal methods", () => {
+  const outcome = determinePaymentOutcome({ method: "CARD" });
+
+  assert.equal(outcome.status, "SUCCEEDED");
+  assert.equal(outcome.eventType, "PaymentCaptured");
+  assert.equal(outcome.reason, null);
+});
+
+test("determinePaymentOutcome returns failure for forced failure methods", () => {
+  const outcome = determinePaymentOutcome({ method: "DECLINED" });
+
+  assert.equal(outcome.status, "FAILED");
+  assert.equal(outcome.eventType, "PaymentFailed");
+  assert.equal(outcome.reason, "PAYMENT_DECLINED");
 });

@@ -20,6 +20,8 @@ CREATE TABLE IF NOT EXISTS payments (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE UNIQUE INDEX IF NOT EXISTS uq_payments_order_id ON payments(order_id);
+
 -- Minimal seed data helps with demo queries and screenshots before POST APIs are implemented.
 INSERT INTO payments (
   payment_id,

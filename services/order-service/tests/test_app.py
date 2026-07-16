@@ -68,6 +68,7 @@ def test_order_events_use_notification_routing_keys(tmp_path: Path) -> None:
         headers=headers,
         json={
             "currency": "USD",
+            "method": "CARD",
             "items": [{"product_id": "p-101", "quantity": 1}],
         },
     )
@@ -82,8 +83,18 @@ def test_order_events_use_notification_routing_keys(tmp_path: Path) -> None:
     assert "order.OrderCreated" in event_names
     assert "order.OrderCancelled" in event_names
 
+    order_created_payload = next(
+        payload for event_name, payload in events if event_name == "order.OrderCreated"
+    )
+    assert order_created_payload["order_id"] == order_id
+    assert order_created_payload["customer_id"] == headers["X-Customer-Id"]
+    assert order_created_payload["amount"] == 25.0
+    assert order_created_payload["currency"] == "USD"
+    assert order_created_payload["method"] == "CARD"
 
-def test_successful_payment_marks_order_paid(tmp_path: Path) -> None:
+
+def test_successful_payment_marks_order_paid(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("ORDER_SYNC_PAYMENT_ENABLED", "true")
     client = build_client(tmp_path)
     headers = {"X-Customer-Id": "c-001"}
 

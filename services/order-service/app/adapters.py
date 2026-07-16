@@ -164,7 +164,7 @@ class StubPaymentAdapter(PaymentPort):
 
 
 class EventPublisherPort:
-    def publish(self, event_name: str, payload: dict[str, str]) -> None:
+    def publish(self, event_name: str, payload: dict[str, object]) -> None:
         raise NotImplementedError
 
 
@@ -180,7 +180,7 @@ class RabbitMqEventPublisher(EventPublisherPort):
         self.amqp_url = amqp_url
         self.exchange = exchange
 
-    def publish(self, event_name: str, payload: dict[str, str]) -> None:
+    def publish(self, event_name: str, payload: dict[str, object]) -> None:
         try:
             import pika
 
@@ -192,13 +192,9 @@ class RabbitMqEventPublisher(EventPublisherPort):
                 durable=True,
             )
 
-            body = json.dumps(
-                {
-                    "event_type": event_name,
-                    "order_id": payload.get("order_id"),
-                    "customer_id": payload.get("customer_id"),
-                }
-            )
+            body_payload = dict(payload)
+            body_payload["event_type"] = event_name
+            body = json.dumps(body_payload)
             channel.basic_publish(
                 exchange=self.exchange,
                 routing_key=event_name,
@@ -249,7 +245,7 @@ class StubCatalogAdapter(CatalogPort):
 
 @dataclass
 class InMemoryEventPublisher(EventPublisherPort):
-    events: list[tuple[str, dict[str, str]]] = field(default_factory=list)
+    events: list[tuple[str, dict[str, object]]] = field(default_factory=list)
 
-    def publish(self, event_name: str, payload: dict[str, str]) -> None:
+    def publish(self, event_name: str, payload: dict[str, object]) -> None:
         self.events.append((event_name, payload))
