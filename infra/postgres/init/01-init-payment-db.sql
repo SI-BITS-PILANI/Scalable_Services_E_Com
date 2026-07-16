@@ -22,35 +22,4 @@ CREATE TABLE IF NOT EXISTS payments (
 
 CREATE UNIQUE INDEX IF NOT EXISTS uq_payments_order_id ON payments(order_id);
 
--- Minimal seed data helps with demo queries and screenshots before POST APIs are implemented.
-INSERT INTO payments (
-  payment_id,
-  order_id,
-  customer_id,
-  amount,
-  currency,
-  method,
-  status,
-  transaction_ref
-)
-SELECT *
-FROM (
-  VALUES
-    ('pay_demo_1001', 'ord_demo_1001', 'cust_demo_1001', 1499.00, 'INR', 'CARD', 'SUCCEEDED', 'txn_demo_1001'),
-    ('pay_demo_1002', 'ord_demo_1002', 'cust_demo_1002', 899.00, 'INR', 'UPI', 'PENDING', 'txn_demo_1002'),
-    ('pay_demo_1003', 'ord_demo_1003', 'cust_demo_1003', 2299.00, 'INR', 'NET_BANKING', 'FAILED', 'txn_demo_1003')
-) AS seed_rows (
-  payment_id,
-  order_id,
-  customer_id,
-  amount,
-  currency,
-  method,
-  status,
-  transaction_ref
-)
-WHERE NOT EXISTS (
-  SELECT 1 FROM payments
-);
-
 RESET ROLE;
