@@ -28,3 +28,6 @@ node_modules/
 docs/docx/_unpacked/
 docs/docx/*.pdf
 docs/docx/preview*
+
+# .md files
+saga_issues.md

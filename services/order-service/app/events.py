@@ -1,5 +1,6 @@
 import json
 import logging
+import time
 from typing import Optional
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import select
@@ -105,51 +106,63 @@ def start_payment_outcome_consumer(rabbitmq_url: str, session_factory: sessionma
     """Start consumer for payment outcome events (PaymentCaptured, PaymentFailed)."""
     import pika
 
-    try:
-        connection = pika.BlockingConnection(pika.URLParameters(rabbitmq_url))
-        channel = connection.channel()
+    retry_delay = 5
+    while True:
+        connection = None
+        try:
+            connection = pika.BlockingConnection(pika.URLParameters(rabbitmq_url))
+            channel = connection.channel()
 
-        exchange = "ecom.events"
-        queue = "order.payment-outcomes.queue"
+            exchange = "ecom.events"
+            queue = "order.payment-outcomes.queue"
 
-        channel.exchange_declare(exchange=exchange, exchange_type="topic", durable=True)
-        channel.queue_declare(queue=queue, durable=True)
+            channel.exchange_declare(exchange=exchange, exchange_type="topic", durable=True)
+            channel.queue_declare(queue=queue, durable=True)
 
-        channel.queue_bind(exchange=exchange, queue=queue, routing_key="payment.PaymentCaptured")
-        channel.queue_bind(exchange=exchange, queue=queue, routing_key="payment.PaymentFailed")
+            channel.queue_bind(exchange=exchange, queue=queue, routing_key="payment.PaymentCaptured")
+            channel.queue_bind(exchange=exchange, queue=queue, routing_key="payment.PaymentFailed")
 
-        logger.info(
-            f"[order-service] payment outcome consumer started; listening on {queue}"
-        )
+            logger.info(
+                f"[order-service] payment outcome consumer started; listening on {queue}"
+            )
+            retry_delay = 5
 
-        def callback(ch, method, properties, body):
-            try:
-                payload = parse_payment_outcome_message(body)
-                if not payload:
-                    logger.warning("[order-service] skipped invalid payment outcome message")
+            def callback(ch, method, properties, body):
+                try:
+                    payload = parse_payment_outcome_message(body)
+                    if not payload:
+                        logger.warning("[order-service] skipped invalid payment outcome message")
+                        ch.basic_ack(delivery_tag=method.delivery_tag)
+                        return
+
+                    event_type = method.routing_key
+                    logger.info(
+                        f"[order-service] consumed {event_type} for order_id={payload['order_id']}"
+                    )
+
+                    update_order_from_payment_outcome(session_factory, payload)
                     ch.basic_ack(delivery_tag=method.delivery_tag)
-                    return
 
-                event_type = method.routing_key
-                logger.info(
-                    f"[order-service] consumed {event_type} for order_id={payload['order_id']}"
-                )
+                except Exception as e:
+                    logger.error(
+                        f"[order-service] payment outcome processing failed: {e}"
+                    )
+                    ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
 
-                update_order_from_payment_outcome(session_factory, payload)
-                ch.basic_ack(delivery_tag=method.delivery_tag)
+            channel.basic_consume(queue=queue, on_message_callback=callback)
+            channel.start_consuming()
 
-            except Exception as e:
-                logger.error(
-                    f"[order-service] payment outcome processing failed: {e}"
-                )
-                ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
-
-        channel.basic_consume(queue=queue, on_message_callback=callback)
-        channel.start_consuming()
-
-    except Exception as e:
-        logger.error(f"[order-service] payment outcome consumer error: {e}")
-        raise
+        except Exception as e:
+            logger.warning(
+                "[order-service] payment outcome consumer error, retrying in %ss: %s",
+                retry_delay,
+                e,
+            )
+            time.sleep(retry_delay)
+            retry_delay = min(retry_delay * 2, 60)
+        finally:
+            if connection and connection.is_open:
+                connection.close()
 
 
 def create_payment_outcome_consumer(rabbitmq_url: str, session_factory: sessionmaker):
