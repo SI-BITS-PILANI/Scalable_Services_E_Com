@@ -21,7 +21,7 @@ from app.adapters import (
 from app.database import create_session_factory
 from app.events import create_payment_outcome_consumer
 from app.models import Base, OrderItemRecord, OrderRecord, OrderStatus
-from app.schemas import CreateOrderRequest, HealthResponse, OrderItemResponse, OrderResponse
+from app.schemas import CreateOrderRequest, HealthResponse, OrderItemResponse, OrderResponse, OrderResponseV2
 
 
 def _build_catalog_adapter() -> StubCatalogAdapter:
@@ -208,6 +208,36 @@ class OrderService:
             updated_at=order.updated_at,
         )
 
+    def _to_response_v2(self, order: OrderRecord) -> OrderResponseV2:
+        """v2 adds tax_amount and total_with_tax for financial transparency."""
+        subtotal = Decimal(order.subtotal)
+        tax_amount = (subtotal * Decimal("0.10")).quantize(Decimal("0.01"))
+        total_with_tax = (subtotal + tax_amount).quantize(Decimal("0.01"))
+        
+        return OrderResponseV2(
+            order_id=order.order_id,
+            customer_id=order.customer_id,
+            status=order.status,
+            currency=order.currency,
+            subtotal=subtotal,
+            total=Decimal(order.total),
+            items=[
+                OrderItemResponse(
+                    product_id=item.product_id,
+                    name=item.product_name,
+                    quantity=item.quantity,
+                    unit_price=Decimal(item.unit_price),
+                    line_total=Decimal(item.line_total),
+                )
+                for item in order.items
+            ],
+            created_at=order.created_at,
+            updated_at=order.updated_at,
+            tax_amount=tax_amount,
+            total_with_tax=total_with_tax,
+            service_version="2.0",
+        )
+
 
 def get_customer_id(x_customer_id: Optional[str] = Header(default=None)) -> str:
     if not x_customer_id:
@@ -255,6 +285,42 @@ def create_app(database_url: Optional[str] = None) -> FastAPI:
     @app.post("/api/v1/orders/{order_id}/cancel", response_model=OrderResponse)
     def cancel_order(order_id: str, customer_id: str = Depends(get_customer_id)) -> OrderResponse:
         return app.state.order_service.cancel_order(customer_id, order_id)
+
+    # ============= v2 API endpoints (non-breaking, includes tax calculations) =============
+
+    @app.post("/api/v2/orders", response_model=OrderResponseV2, status_code=status.HTTP_201_CREATED)
+    def create_order_v2(request: CreateOrderRequest, customer_id: str = Depends(get_customer_id)) -> OrderResponseV2:
+        result = app.state.order_service.create_order(customer_id, request)
+        # Reconstruct as v2 by querying the order we just created
+        with app.state.order_service.session_scope() as session:
+            order = app.state.order_service._find_order(session, customer_id, result.order_id)
+            return app.state.order_service._to_response_v2(order)
+
+    @app.get("/api/v2/orders", response_model=list[OrderResponseV2])
+    def list_orders_v2(customer_id: str = Depends(get_customer_id)) -> list[OrderResponseV2]:
+        with app.state.order_service.session_scope() as session:
+            query = (
+                select(OrderRecord)
+                .options(joinedload(OrderRecord.items))
+                .where(OrderRecord.customer_id == customer_id)
+                .order_by(OrderRecord.created_at.desc())
+            )
+            orders = session.execute(query).scalars().unique().all()
+            return [app.state.order_service._to_response_v2(order) for order in orders]
+
+    @app.get("/api/v2/orders/{order_id}", response_model=OrderResponseV2)
+    def get_order_v2(order_id: str, customer_id: str = Depends(get_customer_id)) -> OrderResponseV2:
+        with app.state.order_service.session_scope() as session:
+            order = app.state.order_service._find_order(session, customer_id, order_id)
+            return app.state.order_service._to_response_v2(order)
+
+    @app.post("/api/v2/orders/{order_id}/cancel", response_model=OrderResponseV2)
+    def cancel_order_v2(order_id: str, customer_id: str = Depends(get_customer_id)) -> OrderResponseV2:
+        result = app.state.order_service.cancel_order(customer_id, order_id)
+        # Reconstruct as v2
+        with app.state.order_service.session_scope() as session:
+            order = app.state.order_service._find_order(session, customer_id, result.order_id)
+            return app.state.order_service._to_response_v2(order)
 
     return app
 
