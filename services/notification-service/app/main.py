@@ -22,7 +22,7 @@ from pymongo import ReturnDocument
 from app.config import settings
 from app.consumer import _build_notification, start_consumer
 from app.database import get_notifications_collection
-from app.schemas import HealthResponse, NotificationResponse, SeedNotificationRequest
+from app.schemas import HealthResponse, NotificationResponse, SeedNotificationRequest, NotificationResponseV2
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -38,6 +38,31 @@ def _serialize(doc: dict) -> dict:
         "message": doc["message"],
         "read": doc.get("read", False),
         "created_at": doc["created_at"],
+    }
+
+
+def _serialize_v2(doc: dict) -> dict:
+    """v2 serialization: adds priority and action_required for UX optimization.
+    
+    v2-aware clients can use priority to sort/highlight notifications and
+    action_required to decide if user needs to take action (e.g., retry payment).
+    """
+    base = _serialize(doc)
+    event_type = doc.get("event_type", "")
+    
+    # Determine priority and action requirement
+    if "Failed" in event_type or "Declined" in event_type:
+        priority = "HIGH"
+        action_required = True
+    else:
+        priority = "NORMAL"
+        action_required = False
+    
+    return {
+        **base,
+        "priority": priority,
+        "action_required": action_required,
+        "service_version": "2.0",
     }
 
 
@@ -173,6 +198,65 @@ def create_app(
         )
         await collection.insert_one(notification)
         return _serialize(notification)
+
+    # ------------------------------------------------------------------
+    # v2 API (non-breaking, adds priority/action_required for UX)
+    # ------------------------------------------------------------------
+
+    @app.get(
+        "/api/v2/notifications",
+        response_model=list[NotificationResponseV2],
+        summary="List notifications with priority hints (v2)",
+    )
+    async def list_notifications_v2(
+        x_customer_id: str = Header(...),
+    ):
+        docs = (
+            await collection.find({"customer_id": x_customer_id})
+            .sort("created_at", -1)
+            .to_list(100)
+        )
+        return [_serialize_v2(doc) for doc in docs]
+
+    @app.get(
+        "/api/v2/notifications/{notification_id}",
+        response_model=NotificationResponseV2,
+        summary="Get a single notification with metadata (v2)",
+    )
+    async def get_notification_v2(
+        notification_id: str,
+        x_customer_id: str = Header(...),
+    ):
+        doc = await collection.find_one(
+            {"notification_id": notification_id, "customer_id": x_customer_id}
+        )
+        if doc is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Notification not found.",
+            )
+        return _serialize_v2(doc)
+
+    @app.put(
+        "/api/v2/notifications/{notification_id}/read",
+        response_model=NotificationResponseV2,
+        summary="Mark a notification as read (v2)",
+    )
+    async def mark_as_read_v2(
+        notification_id: str,
+        x_customer_id: str = Header(...),
+    ):
+        doc = await collection.find_one_and_update(
+            {"notification_id": notification_id, "customer_id": x_customer_id},
+            {"$set": {"read": True}},
+            return_document=ReturnDocument.AFTER,
+        )
+        if doc is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Notification not found.",
+            )
+        return _serialize_v2(doc)
 
     return app
 
