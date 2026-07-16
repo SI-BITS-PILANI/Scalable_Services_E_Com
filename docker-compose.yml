@@ -1,7 +1,7 @@
 services:
-  postgres:
+  postgres-payment:
     image: postgres:16-alpine
-    container_name: ecom-postgres
+    container_name: ecom-postgres-payment
     environment:
       POSTGRES_DB: postgres
       POSTGRES_USER: postgres
@@ -9,8 +9,27 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - postgres-data:/var/lib/postgresql/data
-      - ./infra/postgres/init:/docker-entrypoint-initdb.d:ro
+      - postgres-payment-data:/var/lib/postgresql/data
+      - ./infra/postgres/init/01-init-payment-db.sql:/docker-entrypoint-initdb.d/01-init-payment-db.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 8
+      start_period: 10s
+
+  postgres-order:
+    image: postgres:16-alpine
+    container_name: ecom-postgres-order
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres_password
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres-order-data:/var/lib/postgresql/data
+      - ./infra/postgres/init/02-init-order-db.sql:/docker-entrypoint-initdb.d/01-init-order-db.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
       interval: 10s
@@ -80,7 +99,7 @@ services:
     environment:
       PORT: 8003
       NODE_ENV: production
-      PAYMENT_DB_HOST: postgres
+      PAYMENT_DB_HOST: postgres-payment
       PAYMENT_DB_PORT: 5432
       PAYMENT_DB_NAME: payment_db
       PAYMENT_DB_USER: payment_user
@@ -92,7 +111,7 @@ services:
     ports:
       - "8003:8003"
     depends_on:
-      postgres:
+      postgres-payment:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
@@ -108,7 +127,7 @@ services:
       context: ./services/order-service
     container_name: order-service
     environment:
-      DATABASE_URL: postgresql+psycopg://order_user:order_password@postgres:5432/order_db
+      DATABASE_URL: postgresql+psycopg://order_user:order_password@postgres-order:5432/order_db
       CATALOG_GRPC_HOST: catalog-service
       CATALOG_GRPC_PORT: 50051
       PAYMENT_SERVICE_URL: http://payment-service:8003
@@ -117,7 +136,7 @@ services:
     ports:
       - "8002:8002"
     depends_on:
-      postgres:
+      postgres-order:
         condition: service_healthy
       catalog-service:
         condition: service_healthy
@@ -186,5 +205,6 @@ services:
       start_period: 15s
 
 volumes:
-  postgres-data:
+  postgres-payment-data:
+  postgres-order-data:
   mongodb-data:
