@@ -37,13 +37,27 @@ services:
       retries: 8
       start_period: 10s
 
-  mongodb:
+  mongodb-catalog:
     image: mongo:7
-    container_name: ecom-mongodb
+    container_name: ecom-mongodb-catalog
     ports:
       - "27017:27017"
     volumes:
-      - mongodb-data:/data/db
+      - mongodb-catalog-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 8
+      start_period: 10s
+
+  mongodb-notification:
+    image: mongo:7
+    container_name: ecom-mongodb-notification
+    ports:
+      - "27018:27017"
+    volumes:
+      - mongodb-notification-data:/data/db
     healthcheck:
       test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
       interval: 10s
@@ -69,7 +83,7 @@ services:
       context: ./services/catalog-service
     container_name: catalog-service
     environment:
-      MONGO_URI: mongodb://mongodb:27017
+      MONGO_URI: mongodb://mongodb-catalog:27017
       DB_NAME: catalog_db
       REST_PORT: 8001
       GRPC_PORT: 50051
@@ -81,7 +95,7 @@ services:
       - "8001:8001"
       - "50051:50051"
     depends_on:
-      mongodb:
+      mongodb-catalog:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
@@ -156,14 +170,14 @@ services:
       context: ./services/notification-service
     container_name: notification-service
     environment:
-      MONGO_URI: mongodb://mongodb:27017
+      MONGO_URI: mongodb://mongodb-notification:27017
       DB_NAME: notification_db
       REST_PORT: 8004
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
     ports:
       - "8004:8004"
     depends_on:
-      mongodb:
+      mongodb-notification:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
@@ -207,4 +221,5 @@ services:
 volumes:
   postgres-payment-data:
   postgres-order-data:
-  mongodb-data:
+  mongodb-catalog-data:
+  mongodb-notification-data:
