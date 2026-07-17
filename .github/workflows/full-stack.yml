@@ -120,6 +120,14 @@ jobs:
             npm test
           else
             pip install -r requirements.txt
+
+            # Generate protobuf stubs for services that import generated modules in tests.
+            if [ "${{ matrix.service.name }}" = "catalog-service" ]; then
+              python -m grpc_tools.protoc -I./proto --python_out=. --grpc_python_out=. ./proto/catalog.proto
+            elif [ "${{ matrix.service.name }}" = "order-service" ]; then
+              python -m grpc_tools.protoc -I./app/proto --python_out=. --grpc_python_out=. ./app/proto/catalog.proto
+            fi
+
             pytest -v --tb=short
           fi
 
