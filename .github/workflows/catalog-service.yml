@@ -41,6 +41,9 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
+      - name: Generate gRPC stubs
+        run: python -m grpc_tools.protoc -I./proto --python_out=. --grpc_python_out=. ./proto/catalog.proto
+
       - name: Run tests
         run: pytest -v --tb=short
 
