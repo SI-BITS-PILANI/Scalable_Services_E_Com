@@ -48,3 +48,4 @@ docker build -t catalog-service .
 docker run -p 8001:8001 -p 50051:50051 \
   -e MONGO_URI=mongodb://host.docker.internal:27017 catalog-service
 ```
+----------------------------------------------------------------------------------------------------
