@@ -150,7 +150,7 @@ jobs:
       - name: Build and push all services
         run: |
           SERVICES=("api-gateway" "catalog-service" "order-service" "payment-service" "notification-service")
-          REPO="${{ lower(github.repository) }}"
+          REPO="$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')"
           for SERVICE in "${SERVICES[@]}"; do
             echo "=== Pushing $SERVICE ==="
             docker buildx build \

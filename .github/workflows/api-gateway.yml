@@ -111,13 +111,17 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Compute lowercase repository
+        id: repo
+        run: echo "repo=$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
+
       - name: Build and push
         uses: docker/build-push-action@v5
         with:
           context: ./services/api-gateway
           push: true
           tags: |
-            ghcr.io/${{ lower(github.repository) }}/api-gateway:${{ github.sha }}
-            ghcr.io/${{ lower(github.repository) }}/api-gateway:latest
+            ghcr.io/${{ steps.repo.outputs.repo }}/api-gateway:${{ github.sha }}
+            ghcr.io/${{ steps.repo.outputs.repo }}/api-gateway:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
