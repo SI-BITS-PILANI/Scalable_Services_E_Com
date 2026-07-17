@@ -417,6 +417,352 @@ export function createOpenApiSpec() {
             }
           }
         },
+        "/api/v2/products": {
+          get: {
+            summary: "List products (v2)",
+            responses: {
+              "200": {
+                description: "List of products"
+              }
+            }
+          }
+        },
+        "/api/v2/orders": {
+          get: {
+            summary: "List orders for authenticated customer (v2)",
+            description: "Gateway injects X-Customer-Id from JWT claim into upstream request",
+            security: [{ bearerAuth: [] }],
+            responses: {
+              "200": {
+                description: "List of orders for customer"
+              },
+              "401": {
+                description: "Missing or invalid bearer token"
+              }
+            }
+          },
+          post: {
+            summary: "Create a new order (v2)",
+            description: "Gateway injects X-Customer-Id from JWT claim into upstream request",
+            security: [{ bearerAuth: [] }],
+            requestBody: {
+              required: true,
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    required: ["items"],
+                    properties: {
+                      items: {
+                        type: "array",
+                        minItems: 1,
+                        items: {
+                          type: "object",
+                          required: ["product_id", "quantity"],
+                          properties: {
+                            product_id: { type: "string", example: "p1001" },
+                            quantity: { type: "integer" }
+                          }
+                        }
+                      },
+                      currency: { type: "string", example: "USD" },
+                      method: {
+                        type: "string",
+                        example: "CARD",
+                        description: "Payment method hint forwarded in the order.OrderCreated event (default: CARD)"
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            responses: {
+              "201": {
+                description: "Order created"
+              },
+              "401": {
+                description: "Missing or invalid bearer token"
+              }
+            }
+          }
+        },
+        "/api/v2/orders/{orderId}": {
+          get: {
+            summary: "Get order by ID (v2)",
+            description: "Gateway injects X-Customer-Id from JWT claim into upstream request",
+            security: [{ bearerAuth: [] }],
+            parameters: [
+              {
+                name: "orderId",
+                in: "path",
+                required: true,
+                schema: { type: "string" }
+              }
+            ],
+            responses: {
+              "200": {
+                description: "Order details"
+              },
+              "401": {
+                description: "Missing or invalid bearer token"
+              },
+              "404": {
+                description: "Order not found"
+              }
+            }
+          }
+        },
+        "/api/v2/orders/{orderId}/cancel": {
+          post: {
+            summary: "Cancel an order (v2)",
+            description: "Gateway injects X-Customer-Id from JWT claim into upstream request",
+            security: [{ bearerAuth: [] }],
+            parameters: [
+              {
+                name: "orderId",
+                in: "path",
+                required: true,
+                schema: { type: "string" }
+              }
+            ],
+            responses: {
+              "200": {
+                description: "Order cancelled"
+              },
+              "401": {
+                description: "Missing or invalid bearer token"
+              },
+              "404": {
+                description: "Order not found"
+              }
+            }
+          }
+        },
+        "/api/v2/payments": {
+          get: {
+            summary: "List payments (v2)",
+            security: [{ bearerAuth: [] }],
+            responses: {
+              "200": {
+                description: "List of payments"
+              },
+              "401": {
+                description: "Missing or invalid bearer token"
+              }
+            }
+          },
+          post: {
+            summary: "Create a payment (v2)",
+            security: [{ bearerAuth: [] }],
+            requestBody: {
+              required: true,
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    properties: {
+                      orderId: { type: "string" },
+                      amount: { type: "number" },
+                      method: { type: "string" }
+                    }
+                  }
+                }
+              }
+            },
+            responses: {
+              "201": {
+                description: "Payment created"
+              },
+              "401": {
+                description: "Missing or invalid bearer token"
+              }
+            }
+          }
+        },
+        "/api/v2/payments/{paymentId}": {
+          get: {
+            summary: "Get payment by ID (v2)",
+            security: [{ bearerAuth: [] }],
+            parameters: [
+              {
+                name: "paymentId",
+                in: "path",
+                required: true,
+                schema: { type: "string" }
+              }
+            ],
+            responses: {
+              "200": {
+                description: "Payment details"
+              },
+              "401": {
+                description: "Missing or invalid bearer token"
+              },
+              "404": {
+                description: "Payment not found"
+              }
+            }
+          }
+        },
+        "/api/v2/payments/order/{orderId}": {
+          get: {
+            summary: "Get payment by order ID (v2)",
+            security: [{ bearerAuth: [] }],
+            parameters: [
+              {
+                name: "orderId",
+                in: "path",
+                required: true,
+                schema: { type: "string" }
+              }
+            ],
+            responses: {
+              "200": {
+                description: "Payment for order"
+              },
+              "401": {
+                description: "Missing or invalid bearer token"
+              },
+              "404": {
+                description: "Payment not found"
+              }
+            }
+          }
+        },
+        "/api/v1/notifications": {
+          get: {
+            summary: "List notifications",
+            description: "Gateway injects X-Customer-Id from JWT claim into upstream request",
+            security: [{ bearerAuth: [] }],
+            responses: {
+              "200": {
+                description: "List of notifications"
+              },
+              "401": {
+                description: "Missing or invalid bearer token"
+              }
+            }
+          }
+        },
+        "/api/v1/notifications/{notificationId}": {
+          get: {
+            summary: "Get notification by ID",
+            description: "Gateway injects X-Customer-Id from JWT claim into upstream request",
+            security: [{ bearerAuth: [] }],
+            parameters: [
+              {
+                name: "notificationId",
+                in: "path",
+                required: true,
+                schema: { type: "string" }
+              }
+            ],
+            responses: {
+              "200": {
+                description: "Notification details"
+              },
+              "401": {
+                description: "Missing or invalid bearer token"
+              },
+              "404": {
+                description: "Notification not found"
+              }
+            }
+          }
+        },
+        "/api/v1/notifications/{notificationId}/read": {
+          put: {
+            summary: "Mark notification as read",
+            description: "Gateway injects X-Customer-Id from JWT claim into upstream request",
+            security: [{ bearerAuth: [] }],
+            parameters: [
+              {
+                name: "notificationId",
+                in: "path",
+                required: true,
+                schema: { type: "string" }
+              }
+            ],
+            responses: {
+              "200": {
+                description: "Notification marked as read"
+              },
+              "401": {
+                description: "Missing or invalid bearer token"
+              },
+              "404": {
+                description: "Notification not found"
+              }
+            }
+          }
+        },
+        "/api/v2/notifications": {
+          get: {
+            summary: "List notifications (v2)",
+            description: "Gateway injects X-Customer-Id from JWT claim into upstream request",
+            security: [{ bearerAuth: [] }],
+            responses: {
+              "200": {
+                description: "List of notifications"
+              },
+              "401": {
+                description: "Missing or invalid bearer token"
+              }
+            }
+          }
+        },
+        "/api/v2/notifications/{notificationId}": {
+          get: {
+            summary: "Get notification by ID (v2)",
+            description: "Gateway injects X-Customer-Id from JWT claim into upstream request",
+            security: [{ bearerAuth: [] }],
+            parameters: [
+              {
+                name: "notificationId",
+                in: "path",
+                required: true,
+                schema: { type: "string" }
+              }
+            ],
+            responses: {
+              "200": {
+                description: "Notification details"
+              },
+              "401": {
+                description: "Missing or invalid bearer token"
+              },
+              "404": {
+                description: "Notification not found"
+              }
+            }
+          }
+        },
+        "/api/v2/notifications/{notificationId}/read": {
+          put: {
+            summary: "Mark notification as read (v2)",
+            description: "Gateway injects X-Customer-Id from JWT claim into upstream request",
+            security: [{ bearerAuth: [] }],
+            parameters: [
+              {
+                name: "notificationId",
+                in: "path",
+                required: true,
+                schema: { type: "string" }
+              }
+            ],
+            responses: {
+              "200": {
+                description: "Notification marked as read"
+              },
+              "401": {
+                description: "Missing or invalid bearer token"
+              },
+              "404": {
+                description: "Notification not found"
+              }
+            }
+          }
+        },
         "/health/all": {
           get: {
             summary: "Aggregated health of gateway and all downstream services",
