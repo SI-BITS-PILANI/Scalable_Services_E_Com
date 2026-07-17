@@ -74,7 +74,7 @@ jobs:
   # Run all service tests in parallel
   # ---------------------------------------------------------
   test-services:
-    name: Test ${{ matrix.service }}
+    name: Test ${{ matrix.service.name }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
