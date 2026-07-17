@@ -26,7 +26,7 @@ jobs:
   # 1. Unit tests
   # ---------------------------------------------------------
   test:
-    name: Unit Tests (Python ${{ env.PYTHON_VERSION }})
+    name: Unit Tests (Python 3.11)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

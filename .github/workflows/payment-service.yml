@@ -26,7 +26,7 @@ jobs:
   # 1. Unit tests
   # ---------------------------------------------------------
   test:
-    name: Unit Tests (Node.js ${{ env.NODE_VERSION }})
+    name: Unit Tests (Node.js 20)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
