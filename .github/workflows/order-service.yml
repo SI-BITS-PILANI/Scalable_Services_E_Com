@@ -97,7 +97,7 @@ jobs:
           context: ./services/order-service
           push: true
           tags: |
-            ghcr.io/${{ github.repository }}/order-service:${{ github.sha }}
-            ghcr.io/${{ github.repository }}/order-service:latest
+            ghcr.io/${{ lower(github.repository) }}/order-service:${{ github.sha }}
+            ghcr.io/${{ lower(github.repository) }}/order-service:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max

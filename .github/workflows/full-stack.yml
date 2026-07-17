@@ -21,17 +21,12 @@ on:
         type: string
   push:
     branches: [main]
-    paths-ignore:
-      - ".github/workflows/api-gateway.yml"
-      - ".github/workflows/catalog-service.yml"
-      - ".github/workflows/order-service.yml"
-      - ".github/workflows/payment-service.yml"
-      - ".github/workflows/notification-service.yml"
-      - "README.md"
-      - "LICENSE"
+    paths:
+      - "docker-compose.yml"
+      - "infra/**"
 
 env:
-  NODE_VERSION: "20"
+  NODE_VERSION: "22"
   PYTHON_VERSION: "3.12"
 
 jobs:
@@ -155,14 +150,15 @@ jobs:
       - name: Build and push all services
         run: |
           SERVICES=("api-gateway" "catalog-service" "order-service" "payment-service" "notification-service")
+          REPO="${{ lower(github.repository) }}"
           for SERVICE in "${SERVICES[@]}"; do
             echo "=== Pushing $SERVICE ==="
             docker buildx build \
               --push \
               --cache-from type=gha \
               --cache-to type=gha,mode=max \
-              --tag "ghcr.io/${{ github.repository }}/$SERVICE:${{ steps.tag.outputs.tag }}" \
-              --tag "ghcr.io/${{ github.repository }}/$SERVICE:latest" \
+              --tag "ghcr.io/$REPO/$SERVICE:${{ steps.tag.outputs.tag }}" \
+              --tag "ghcr.io/$REPO/$SERVICE:latest" \
               --context "./services/$SERVICE" \
               .
           done

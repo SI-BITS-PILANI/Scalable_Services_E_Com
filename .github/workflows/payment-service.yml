@@ -19,14 +19,14 @@ defaults:
     working-directory: services/payment-service
 
 env:
-  NODE_VERSION: "20"
+  NODE_VERSION: "22"
 
 jobs:
   # ---------------------------------------------------------
   # 1. Unit tests
   # ---------------------------------------------------------
   test:
-    name: Unit Tests (Node.js 20)
+    name: Unit Tests (Node.js 22)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -94,7 +94,7 @@ jobs:
           context: ./services/payment-service
           push: true
           tags: |
-            ghcr.io/${{ github.repository }}/payment-service:${{ github.sha }}
-            ghcr.io/${{ github.repository }}/payment-service:latest
+            ghcr.io/${{ lower(github.repository) }}/payment-service:${{ github.sha }}
+            ghcr.io/${{ lower(github.repository) }}/payment-service:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max

@@ -94,7 +94,7 @@ jobs:
           context: ./services/notification-service
           push: true
           tags: |
-            ghcr.io/${{ github.repository }}/notification-service:${{ github.sha }}
-            ghcr.io/${{ github.repository }}/notification-service:latest
+            ghcr.io/${{ lower(github.repository) }}/notification-service:${{ github.sha }}
+            ghcr.io/${{ lower(github.repository) }}/notification-service:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
