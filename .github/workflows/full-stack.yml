@@ -1,0 +1,181 @@
+# Full Stack — Manual Deploy
+# Triggers: workflow_dispatch (manual) or push to main touching multiple services
+# Builds and pushes ALL service images, then validates docker-compose
+
+name: Full Stack Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Target environment"
+        required: true
+        default: "staging"
+        type: choice
+        options:
+          - staging
+          - production
+      tag:
+        description: "Image tag (defaults to git SHA)"
+        required: false
+        type: string
+  push:
+    branches: [main]
+    paths-ignore:
+      - ".github/workflows/api-gateway.yml"
+      - ".github/workflows/catalog-service.yml"
+      - ".github/workflows/order-service.yml"
+      - ".github/workflows/payment-service.yml"
+      - ".github/workflows/notification-service.yml"
+      - "README.md"
+      - "LICENSE"
+
+env:
+  NODE_VERSION: "20"
+  PYTHON_VERSION: "3.12"
+
+jobs:
+  # ---------------------------------------------------------
+  # Matrix build — all services in parallel
+  # ---------------------------------------------------------
+  build-services:
+    name: Build ${{ matrix.service }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - api-gateway
+          - catalog-service
+          - order-service
+          - payment-service
+          - notification-service
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Compute image tag
+        id: tag
+        run: |
+          TAG="${{ github.event.inputs.tag || github.sha }}"
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+
+      - name: Build image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./services/${{ matrix.service }}
+          push: false
+          tags: ${{ matrix.service }}:${{ steps.tag.outputs.tag }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ---------------------------------------------------------
+  # Run all service tests in parallel
+  # ---------------------------------------------------------
+  test-services:
+    name: Test ${{ matrix.service }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - name: api-gateway
+            type: node
+          - name: catalog-service
+            type: python
+            python-version: "3.11"
+          - name: order-service
+            type: python
+            python-version: "3.12"
+          - name: payment-service
+            type: node
+          - name: notification-service
+            type: python
+            python-version: "3.12"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        if: matrix.service.type == 'node'
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+          cache-dependency-path: services/${{ matrix.service.name }}/package-lock.json
+
+      - name: Setup Python
+        if: matrix.service.type == 'python'
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.service.python-version }}
+          cache: "pip"
+          cache-dependency-path: services/${{ matrix.service.name }}/requirements.txt
+
+      - name: Install dependencies & run tests
+        working-directory: services/${{ matrix.service.name }}
+        run: |
+          if [ "${{ matrix.service.type }}" = "node" ]; then
+            npm ci
+            npm test
+          else
+            pip install -r requirements.txt
+            pytest -v --tb=short
+          fi
+
+  # ---------------------------------------------------------
+  # Push all images (on main or manual dispatch)
+  # ---------------------------------------------------------
+  push-all:
+    name: Push All Images
+    runs-on: ubuntu-latest
+    needs: [build-services, test-services]
+    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+    environment: ${{ github.event.inputs.environment || 'production' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Login to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Compute image tag
+        id: tag
+        run: |
+          TAG="${{ github.event.inputs.tag || github.sha }}"
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+
+      - name: Build and push all services
+        run: |
+          SERVICES=("api-gateway" "catalog-service" "order-service" "payment-service" "notification-service")
+          for SERVICE in "${SERVICES[@]}"; do
+            echo "=== Pushing $SERVICE ==="
+            docker buildx build \
+              --push \
+              --cache-from type=gha \
+              --cache-to type=gha,mode=max \
+              --tag "ghcr.io/${{ github.repository }}/$SERVICE:${{ steps.tag.outputs.tag }}" \
+              --tag "ghcr.io/${{ github.repository }}/$SERVICE:latest" \
+              --context "./services/$SERVICE" \
+              .
+          done
+
+  # ---------------------------------------------------------
+  # Validate docker-compose with new images
+  # ---------------------------------------------------------
+  validate-compose:
+    name: Validate Docker Compose
+    runs-on: ubuntu-latest
+    needs: push-all
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate docker-compose.yml
+        run: docker compose -f docker-compose.yml config --quiet

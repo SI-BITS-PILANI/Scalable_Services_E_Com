@@ -1,0 +1,25 @@
+# CODEOWNERS
+# Assigns review ownership for each service directory.
+# Replace @team-* with actual GitHub usernames or teams.
+
+# API Gateway owners
+services/api-gateway/     @team-gateway
+
+# Catalog Service owners
+services/catalog-service/ @team-catalog
+
+# Order Service owners
+services/order-service/   @team-order
+
+# Payment Service owners
+services/payment-service/ @team-payment
+
+# Notification Service owners
+services/notification-service/ @team-notification
+
+# Infrastructure owners (docker-compose, DB init scripts)
+infra/                    @team-infra
+docker-compose.yml        @team-infra
+
+# CI/CD workflows
+.github/workflows/        @team-infra

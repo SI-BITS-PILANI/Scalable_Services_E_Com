@@ -1,0 +1,70 @@
+# Infrastructure — CI
+# Triggers: push/PR to docker-compose.yml or infra/**
+# Runs: docker-compose config validation
+
+name: Infrastructure
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - "docker-compose.yml"
+      - "infra/**"
+  pull_request:
+    branches: [main]
+    paths:
+      - "docker-compose.yml"
+      - "infra/**"
+
+jobs:
+  # ---------------------------------------------------------
+  # 1. Validate docker-compose syntax
+  # ---------------------------------------------------------
+  validate-compose:
+    name: Validate Docker Compose
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate docker-compose.yml
+        run: docker compose -f docker-compose.yml config --quiet
+
+  # ---------------------------------------------------------
+  # 2. Validate SQL init scripts (syntax check)
+  # ---------------------------------------------------------
+  validate-sql:
+    name: Validate SQL Init Scripts
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install postgresql-client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+
+      - name: Validate payment DB init script
+        run: |
+          psql -h localhost -U postgres -d postgres -f infra/postgres/init/01-init-payment-db.sql
+        env:
+          PGPASSWORD: postgres
+
+      - name: Validate order DB init script
+        run: |
+          psql -h localhost -U postgres -d postgres -f infra/postgres/init/02-init-order-db.sql
+        env:
+          PGPASSWORD: postgres

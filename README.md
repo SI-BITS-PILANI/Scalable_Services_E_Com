@@ -64,3 +64,47 @@ curl http://localhost:8000/api/v1/notifications -H "Authorization: Bearer <token
 ```bash
 docker compose down
 ```
+
+## CI / CD
+
+This monorepo uses **path-filtered GitHub Actions** so each service is tested and built independently. Only the workflow for the changed service runs on each push/PR.
+
+### Workflows
+
+| Workflow | Trigger Path | Jobs |
+|---|---|---|
+| [API Gateway](.github/workflows/api-gateway.yml) | `services/api-gateway/**` | Type check → Tests → Docker build → Push (main) |
+| [Catalog Service](.github/workflows/catalog-service.yml) | `services/catalog-service/**` | Tests → Docker build → Push (main) |
+| [Order Service](.github/workflows/order-service.yml) | `services/order-service/**` | Tests → Docker build → Push (main) |
+| [Payment Service](.github/workflows/payment-service.yml) | `services/payment-service/**` | Tests → Docker build → Push (main) |
+| [Notification Service](.github/workflows/notification-service.yml) | `services/notification-service/**` | Tests → Docker build → Push (main) |
+| [Infrastructure](.github/workflows/infra.yml) | `docker-compose.yml`, `infra/**` | Compose validate → SQL init scripts validate |
+| [Full Stack Deploy](.github/workflows/full-stack.yml) | Manual dispatch / cross-service changes on main | All services build + test + push in parallel |
+
+### How It Works
+
+- **Per-service PRs** — Changing files under `services/<name>/` only triggers that service's workflow. Other services are unaffected.
+- **Docker image push** — Images are pushed to GitHub Container Registry (`ghcr.io`) only on pushes to `main`.
+- **Full stack deploy** — Trigger manually from Actions tab to build, test, and push all services at once (useful for coordinated releases).
+- **Service ownership** — `.github/CODEOWNERS` assigns review ownership per service directory.
+
+### Local Testing
+
+Each service can be tested locally without the full stack:
+
+```bash
+# API Gateway (TypeScript)
+cd services/api-gateway && npm install && npm test
+
+# Catalog Service (Python)
+cd services/catalog-service && pip install -r requirements.txt && pytest
+
+# Order Service (Python)
+cd services/order-service && pip install -r requirements.txt && pytest
+
+# Payment Service (Node.js)
+cd services/payment-service && npm install && npm test
+
+# Notification Service (Python)
+cd services/notification-service && pip install -r requirements.txt && pytest
+```
