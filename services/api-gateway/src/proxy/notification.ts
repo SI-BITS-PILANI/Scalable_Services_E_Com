@@ -58,7 +58,13 @@ export function getNotificationProxyMiddleware() {
 export function setupNotificationRoutes(app: Router) {
   const notificationProxy = getNotificationProxyMiddleware();
 
+  // v1 notification routes
   app.get("/api/v1/notifications", injectCustomerIdHeader, notificationProxy);
   app.get("/api/v1/notifications/:notificationId", injectCustomerIdHeader, notificationProxy);
   app.put("/api/v1/notifications/:notificationId/read", injectCustomerIdHeader, notificationProxy);
+
+  // v2 notification routes
+  app.get("/api/v2/notifications", injectCustomerIdHeader, notificationProxy);
+  app.get("/api/v2/notifications/:notificationId", injectCustomerIdHeader, notificationProxy);
+  app.put("/api/v2/notifications/:notificationId/read", injectCustomerIdHeader, notificationProxy);
 }

@@ -35,10 +35,16 @@ export function getPaymentProxyMiddleware() {
 export function setupPaymentRoutes(app: Router) {
   const paymentProxy = getPaymentProxyMiddleware();
 
-  // All payment routes
+  // v1 payment routes
   app.get("/api/v1/payments", paymentProxy);
   app.post("/api/v1/payments", paymentProxy);
   app.get("/api/v1/payments/:paymentId", paymentProxy);
   app.get("/api/v1/payments/order/:orderId", paymentProxy);
   app.post("/api/v1/payments/:paymentId/refund", paymentProxy);
+
+  // v2 payment routes
+  app.get("/api/v2/payments", paymentProxy);
+  app.post("/api/v2/payments", paymentProxy);
+  app.get("/api/v2/payments/:paymentId", paymentProxy);
+  app.get("/api/v2/payments/order/:orderId", paymentProxy);
 }

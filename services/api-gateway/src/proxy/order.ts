@@ -64,10 +64,17 @@ export function setupOrderRoutes(app: Router) {
   // injectCustomerIdHeader middleware attaches customerId to request
   const orderProxy = getOrderProxyMiddleware();
 
+  // v1 order routes
   app.get("/api/v1/orders", injectCustomerIdHeader, orderProxy);
   app.post("/api/v1/orders", injectCustomerIdHeader, orderProxy);
   app.get("/api/v1/orders/:orderId", injectCustomerIdHeader, orderProxy);
   app.patch("/api/v1/orders/:orderId", injectCustomerIdHeader, orderProxy);
   app.delete("/api/v1/orders/:orderId", injectCustomerIdHeader, orderProxy);
   app.post("/api/v1/orders/:orderId/cancel", injectCustomerIdHeader, orderProxy);
+
+  // v2 order routes
+  app.get("/api/v2/orders", injectCustomerIdHeader, orderProxy);
+  app.post("/api/v2/orders", injectCustomerIdHeader, orderProxy);
+  app.get("/api/v2/orders/:orderId", injectCustomerIdHeader, orderProxy);
+  app.post("/api/v2/orders/:orderId/cancel", injectCustomerIdHeader, orderProxy);
 }
