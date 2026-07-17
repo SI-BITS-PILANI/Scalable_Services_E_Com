@@ -171,8 +171,7 @@ jobs:
               --cache-to type=gha,mode=max \
               --tag "ghcr.io/$REPO/$SERVICE:${{ steps.tag.outputs.tag }}" \
               --tag "ghcr.io/$REPO/$SERVICE:latest" \
-              --context "./services/$SERVICE" \
-              .
+              "./services/$SERVICE"
           done
 
   # ---------------------------------------------------------
