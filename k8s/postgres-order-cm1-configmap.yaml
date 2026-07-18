@@ -1,0 +1,13 @@
+apiVersion: v1
+data:
+  02-init-order-db.sql: |
+    -- Dedicated credentials + database for order-service.
+    CREATE USER order_user WITH PASSWORD 'order_password';
+    CREATE DATABASE order_db OWNER order_user;
+kind: ConfigMap
+metadata:
+  annotations:
+    use-subpath: "true"
+  labels:
+    io.kompose.service: postgres-order
+  name: postgres-order-cm1

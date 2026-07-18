@@ -1,0 +1,67 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    kompose.cmd: C:\Users\z004kryx\AppData\Local\Microsoft\WinGet\Packages\Kubernetes.kompose_Microsoft.Winget.Source_8wekyb3d8bbwe\kompose.exe convert -f .\docker-compose.yml -o .\k8s\
+    kompose.version: 1.38.0 (a8f5d1cbd)
+  labels:
+    io.kompose.service: postgres-payment
+  name: postgres-payment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      io.kompose.service: postgres-payment
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      annotations:
+        kompose.cmd: C:\Users\z004kryx\AppData\Local\Microsoft\WinGet\Packages\Kubernetes.kompose_Microsoft.Winget.Source_8wekyb3d8bbwe\kompose.exe convert -f .\docker-compose.yml -o .\k8s\
+        kompose.version: 1.38.0 (a8f5d1cbd)
+      labels:
+        io.kompose.service: postgres-payment
+    spec:
+      containers:
+        - env:
+            - name: POSTGRES_DB
+              value: postgres
+            - name: POSTGRES_PASSWORD
+              value: postgres_password
+            - name: POSTGRES_USER
+              value: postgres
+          image: postgres:16-alpine
+          livenessProbe:
+            exec:
+              command:
+                - pg_isready
+                - -U
+                - postgres
+                - -d
+                - postgres
+            failureThreshold: 8
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+          name: ecom-postgres-payment
+          ports:
+            - containerPort: 5432
+              protocol: TCP
+          volumeMounts:
+            - mountPath: /var/lib/postgresql/data
+              name: postgres-payment-data
+            - mountPath: /docker-entrypoint-initdb.d/01-init-payment-db.sql
+              name: postgres-payment-cm1
+              readOnly: true
+              subPath: 01-init-payment-db.sql
+      restartPolicy: Always
+      volumes:
+        - name: postgres-payment-data
+          persistentVolumeClaim:
+            claimName: postgres-payment-data
+        - configMap:
+            items:
+              - key: 01-init-payment-db.sql
+                path: 01-init-payment-db.sql
+            name: postgres-payment-cm1
+          name: postgres-payment-cm1
